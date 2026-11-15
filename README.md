@@ -81,14 +81,6 @@ Building on macOS or Linux also works, but you have to install [Wine](https://ww
 
 To change the version number, edit `"version"` in `package.json`.
 
-### Put the web version online (GitHub Pages)
-
-1. Push the repo to GitHub.
-2. In the repo: **Settings → Pages → Build and deployment → Source: Deploy from a branch**, branch `main`, folder `/docs`.
-3. After a minute it's live at `https://<your-username>.github.io/<repo-name>/`.
-
-If you edit `src/`, run `npm run build` and commit the updated `docs/index.html`.
-
 ## About the Windows security warning
 
 The installer isn't code-signed (signing certificates cost money each year), so the first time it runs Windows shows **"Windows protected your PC"**. Click **More info → Run anyway**. Anyone you share the installer with will see the same warning.
