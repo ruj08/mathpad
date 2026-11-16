@@ -1,0 +1,50 @@
+name: Release Windows app
+
+# Every change pushed to main (including files uploaded on github.com) builds a new
+# version of the Windows app and publishes it as a GitHub Release. Installed copies of
+# Mathpad check Releases and update themselves.
+# Changes to only the README, screenshots or docs/ don't make a new release.
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'main.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'build/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # If the translator tests fail, nothing is released
+      - run: npm test
+
+      - name: Set version and release target
+        run: node scripts/ci-prepare.js ${{ github.run_number }} ${{ github.repository_owner }} ${{ github.event.repository.name }}
+
+      - run: npm run build
+
+      - name: Build the installer and publish the release
+        run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
