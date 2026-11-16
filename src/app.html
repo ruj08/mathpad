@@ -42,7 +42,36 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .item .del{position:absolute;right:6px;top:8px;opacity:0;color:var(--muted);padding:2px 6px;border-radius:6px;font-size:13px}
 .item:hover .del,.item.active .del{opacity:1}
 .item .del:hover{color:var(--danger);background:var(--paper)}
-.confirm{display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:6px}
+.confirm{display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:6px;flex-wrap:wrap}
+.item[draggable="true"]{cursor:grab}
+.item.dragging{opacity:.45}
+/* subject sections */
+.dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block}
+.sec-h{display:flex;align-items:center;gap:7px;padding:6px 4px 6px 4px;margin-top:6px;border-radius:7px;cursor:pointer;user-select:none}
+.sec-h:hover{background:color-mix(in srgb,var(--line) 45%,transparent)}
+.sec-h .caret{width:12px;font-size:9px;color:var(--faint);transition:transform .15s;text-align:center}
+.sec-h.collapsed .caret{transform:rotate(-90deg)}
+.sec-h .name{flex:1;min-width:0;font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sec-h .count{font-size:11.5px;color:var(--faint);min-width:14px;text-align:right}
+.sec-h .sbtn{width:22px;height:22px;border-radius:6px;color:var(--muted);opacity:0;font-size:15px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.sec-h:hover .sbtn,.sec-h .sbtn.on{opacity:1}
+.sec-h .sbtn:hover{background:var(--paper);color:var(--accent)}
+.sec-h.drop{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.sec-body{padding-left:12px}
+.sec-empty{font-size:12.5px;color:var(--faint);padding:4px 10px 6px}
+.sec-menu{margin:2px 4px 8px 22px;padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--paper);display:flex;flex-direction:column;gap:8px;font-size:13px}
+.sec-menu .row{display:flex;gap:6px;flex-wrap:wrap}
+.sec-menu button.lnk{padding:4px 8px;border-radius:6px;border:1px solid var(--line);font-size:12.5px}
+.sec-menu button.lnk:hover{background:var(--panel)}
+.sec-menu button.danger{color:var(--danger)}
+.swatch{width:18px;height:18px;border-radius:50%;border:2px solid transparent;box-shadow:0 0 0 1px var(--line)}
+.swatch.on{border-color:var(--paper);box-shadow:0 0 0 2px var(--ink)}
+.add-subj{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px;margin-top:10px;color:var(--muted);font-size:13px;border-radius:8px;border:1px dashed var(--line)}
+.add-subj:hover{color:var(--accent);border-color:var(--accent)}
+.subj-input{width:100%;font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid var(--accent);border-radius:7px;background:var(--paper);color:var(--ink);outline:none}
+.subj-chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);padding:4px 10px;border:1px solid var(--line);border-radius:999px;margin-bottom:12px;background:var(--paper)}
+.subj-chip:hover{color:var(--ink);border-color:var(--faint)}
+#subjMenu .new-subj{padding:4px 6px}
 .confirm button{padding:3px 8px;border-radius:6px;border:1px solid var(--line);background:var(--paper)}
 .confirm .yes{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
 .status{padding:10px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
@@ -280,6 +309,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
   <button data-style="3" class="m-h3">Heading 3 <kbd>Ctrl+Alt+3</kbd></button>
   <button data-style="math">∑ Math line <kbd>Ctrl+M</kbd></button>
 </div>
+<div class="fmenu" id="subjMenu"></div>
 <div class="fmenu" id="fmtSizeMenu">
   <button data-size="s" style="font-size:12.5px">Small</button>
   <button data-size="m">Normal</button>
@@ -427,7 +457,20 @@ function keep(b){
 }
 
 // ---------------- state ----------------
-let notes = new Map();      // id -> {id,title,blocks:[{type,text}],updated,created}
+let notes = new Map();      // id -> {id,title,subject,blocks:[{type,text}],updated,created}
+let subjects = [];          // [{id,name,color,collapsed}] in display order
+let subjectsDirty = false, subjectsSaving = false, subjectsPending = false;
+const LS_SUBJECTS = 'mathpad.subjects.v1';
+const SUBJECTS_DOC = 'subjects';   // id of the one document that holds the subject list (not a note)
+const COLORS = ['#2747a8', '#c2410c', '#15803d', '#7c3aed', '#be185d', '#0e7490', '#a16207', '#b91c1c', '#4b5563'];
+function noteFrom(id, d){
+  return { id, title: String(d.title || ''), subject: String(d.subject || ''), blocks: Array.isArray(d.blocks) ? d.blocks.map(keep) : [], updated: d.updated || 0, created: d.created || d.updated || 0 };
+}
+function cleanSubjects(list){
+  return (Array.isArray(list) ? list : []).filter(x => x && typeof x.id === 'string' && x.id && typeof x.name === 'string')
+    .map(x => ({ id: x.id, name: x.name.slice(0, 60), color: COLORS.includes(x.color) ? x.color : COLORS[0], collapsed: !!x.collapsed }));
+}
+const subjectOf = n => subjects.find(x => x.id === (n && n.subject)) || null;
 let currentId = null;
 let mode = 'loading';       // 'db' | 'local'
 let db = null, col = null, downloads = null;
@@ -445,28 +488,49 @@ let toastT;
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
 
 // ---------------- persistence ----------------
-function payload(n){ return { title: n.title || '', blocks: n.blocks.map(keep), updated: n.updated, created: n.created || n.updated, by: SESSION }; }
+function payload(n){ return { title: n.title || '', subject: n.subject || '', blocks: n.blocks.map(keep), updated: n.updated, created: n.created || n.updated, by: SESSION }; }
 function markDirty(){
   const n = notes.get(currentId); if (!n) return;
   n.blocks = blocks.map(keep);
   n.updated = Date.now();
   dirty.add(currentId);
+  scheduleSave();
+  renderList();
+}
+function scheduleSave(){
   setStatus('saving', 'Saving…');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flush, 700);
-  renderList();
 }
 function flush(){
   if (mode === 'local'){
     try {
       const all = {}; notes.forEach((n,id) => all[id] = payload(n));
       localStorage.setItem(LS_KEY, JSON.stringify(all));
-      dirty.clear(); setStatus('saved', LOCAL_LABEL);
+      localStorage.setItem(LS_SUBJECTS, JSON.stringify(subjects));
+      dirty.clear(); subjectsDirty = false; setStatus('saved', LOCAL_LABEL);
     } catch(e){ setStatus('err', 'Could not save in this browser'); }
     return;
   }
   [...dirty].forEach(saveNote);
+  if (subjectsDirty) saveSubjects();
 }
+async function saveSubjects(){
+  if (subjectsSaving){ subjectsPending = true; return; }
+  subjectsSaving = true; subjectsDirty = false;
+  try {
+    await col.doc(SUBJECTS_DOC).set({ list: subjects, updated: Date.now(), by: SESSION });
+    if (!dirty.size && !pending.size) setStatus('saved', 'All changes saved');
+  } catch(e){
+    subjectsDirty = true;
+    setStatus('err', 'Subjects not saved — retrying');
+    setTimeout(() => { if (subjectsDirty) saveSubjects(); }, 2500 + Math.random() * 1500);
+  } finally {
+    subjectsSaving = false;
+    if (subjectsPending){ subjectsPending = false; saveSubjects(); }
+  }
+}
+function subjectsChanged(){ subjectsDirty = true; scheduleSave(); renderList(); }
 async function saveNote(id){
   if (saving.has(id)){ pending.add(id); return; }
   const n = notes.get(id); if (!n){ dirty.delete(id); return; }
@@ -516,11 +580,16 @@ async function init(){
       let currentChanged = false;
       snap.docChanges().forEach(ch => {
         const id = ch.doc.id;
+        if (id === SUBJECTS_DOC){
+          const d = ch.doc.data() || {};
+          if (ch.type !== 'removed' && d.by !== SESSION && !subjectsDirty && !subjectsSaving) subjects = cleanSubjects(d.list);
+          return;
+        }
         if (ch.type === 'removed'){ if (!dirty.has(id)) notes.delete(id); if (id === currentId) currentChanged = 'removed'; return; }
         const d = ch.doc.data() || {};
         if (d.by === SESSION && notes.has(id)) return;          // our own write echoing back
         if (dirty.has(id) || saving.has(id)) return;             // local edits win
-        notes.set(id, { id, title: d.title || '', blocks: Array.isArray(d.blocks) ? d.blocks.map(keep) : [], updated: d.updated || 0, created: d.created || 0 });
+        notes.set(id, noteFrom(id, d));
         if (id === currentId) currentChanged = true;
       });
       if (first){
@@ -547,7 +616,9 @@ function fallbackLocal(){
   mode = 'local';
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw){ const all = JSON.parse(raw); Object.keys(all).forEach(id => { const d = all[id]; if (!notes.has(id)) notes.set(id, {id, title:d.title||'', blocks:d.blocks||[], updated:d.updated||0, created:d.created||0}); }); }
+    if (raw){ const all = JSON.parse(raw); Object.keys(all).forEach(id => { if (!notes.has(id)) notes.set(id, noteFrom(id, all[id] || {})); }); }
+    const rawS = localStorage.getItem(LS_SUBJECTS);
+    if (rawS && !subjects.length) subjects = cleanSubjects(JSON.parse(rawS));
   } catch(e){}
   setStatus('saved', LOCAL_LABEL);
   renderList();
@@ -573,42 +644,217 @@ function fmtDate(t){
   return d.toLocaleDateString([], {month:'short', day:'numeric'});
 }
 let confirmId = null;
+let subjMenuId = null, renamingId = null, confirmSubjId = null, addingSubject = false, unsortedCollapsed = false, listPending = false;
+const matchesSearch = (n, q) => !q || noteTitle(n).toLowerCase().includes(q) || n.blocks.some(b => b.text.toLowerCase().includes(q));
+
+function noteItem(n){
+  const it = document.createElement('div');
+  it.className = 'item' + (n.id === currentId ? ' active' : '');
+  it.tabIndex = 0;
+  it.draggable = true;
+  const t = document.createElement('div'); t.className = 't'; t.textContent = noteTitle(n);
+  const d = document.createElement('div'); d.className = 'd'; d.textContent = fmtDate(n.updated) + ' · ' + snippet(n);
+  const del = document.createElement('button'); del.className = 'del'; del.textContent = '✕'; del.title = 'Delete note';
+  del.onclick = e => { e.stopPropagation(); confirmId = n.id; renderList(); };
+  it.append(t, d, del);
+  if (confirmId === n.id){
+    const c = document.createElement('div'); c.className = 'confirm';
+    c.innerHTML = '<span>Delete this note?</span>';
+    const y = document.createElement('button'); y.className='yes'; y.textContent='Delete';
+    const no = document.createElement('button'); no.textContent='Cancel';
+    y.onclick = e => { e.stopPropagation(); confirmId = null; removeNote(n.id); };
+    no.onclick = e => { e.stopPropagation(); confirmId = null; renderList(); };
+    c.append(y, no); it.append(c);
+  }
+  it.onclick = () => { openNote(n.id); $('#side').classList.remove('open'); };
+  it.onkeydown = e => { if (e.key === 'Enter') it.click(); };
+  it.ondragstart = e => { e.dataTransfer.setData('text/x-mathpad-note', n.id); e.dataTransfer.effectAllowed = 'move'; it.classList.add('dragging'); };
+  it.ondragend = () => it.classList.remove('dragging');
+  return it;
+}
+function dropTarget(el, subjectId){
+  el.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('text/x-mathpad-note')){ e.preventDefault(); el.classList.add('drop'); } });
+  el.addEventListener('dragleave', () => el.classList.remove('drop'));
+  el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('drop'); const id = e.dataTransfer.getData('text/x-mathpad-note'); if (id) moveNote(id, subjectId); });
+}
+function textInput(value, placeholder, onDone, opts){
+  opts = opts || {};
+  // small inline text box: Enter saves, Escape or clicking away cancels (or saves, if something was typed)
+  const inp = document.createElement('input');
+  inp.className = 'subj-input'; inp.value = value; inp.placeholder = placeholder; inp.maxLength = 60;
+  let done = false;
+  const finish = save => { if (done) return; done = true; const val = inp.value.trim(); if (document.activeElement === inp) inp.blur(); onDone(save ? val : null); };
+  inp.onkeydown = e => { if (e.key === 'Enter'){ e.preventDefault(); finish(true); } if (e.key === 'Escape'){ e.preventDefault(); finish(false); } };
+  inp.onblur = () => { if (opts.stayOpen && !inp.value.trim()) return; finish(!!inp.value.trim()); };
+  inp.onclick = e => e.stopPropagation();
+  if (opts.autofocus !== false) inp.dataset.af = '1';   // renderList focuses it as soon as it's on screen
+  return inp;
+}
+function sectionHeader({ id, name, color, collapsed, count, editable }){
+  const h = document.createElement('div');
+  h.className = 'sec-h' + (collapsed ? ' collapsed' : '');
+  h.innerHTML = '<span class="caret">▼</span>';
+  if (color){ const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = color; h.append(dot); }
+  if (renamingId === id){
+    h.append(textInput(name, 'Subject name', val => { renamingId = null; if (val){ const sub = subjects.find(x => x.id === id); if (sub){ sub.name = val; subjectsChanged(); refreshChip(); return; } } renderList(); }));
+  } else {
+    const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = name; h.append(nm);
+  }
+  const ct = document.createElement('span'); ct.className = 'count'; ct.textContent = count; h.append(ct);
+  const add = document.createElement('button'); add.className = 'sbtn'; add.textContent = '+'; add.title = 'New note in ' + name;
+  add.onclick = e => { e.stopPropagation(); createNote(null, id); $('#side').classList.remove('open'); };
+  h.append(add);
+  if (editable){
+    const more = document.createElement('button'); more.className = 'sbtn' + (subjMenuId === id ? ' on' : ''); more.textContent = '⋯'; more.title = 'Rename, color, delete';
+    more.onclick = e => { e.stopPropagation(); subjMenuId = subjMenuId === id ? null : id; confirmSubjId = null; renderList(); };
+    h.append(more);
+  }
+  h.onclick = () => {
+    if (editable){ const sub = subjects.find(x => x.id === id); sub.collapsed = !sub.collapsed; subjectsChanged(); }
+    else { unsortedCollapsed = !unsortedCollapsed; renderList(); }
+  };
+  dropTarget(h, id);
+  return h;
+}
+function subjectMenu(sub){
+  const m = document.createElement('div'); m.className = 'sec-menu';
+  m.onclick = e => e.stopPropagation();
+  const sw = document.createElement('div'); sw.className = 'row';
+  COLORS.forEach(c => {
+    const b = document.createElement('button'); b.className = 'swatch' + (sub.color === c ? ' on' : ''); b.style.background = c; b.title = 'Color';
+    b.onclick = () => { sub.color = c; subjectsChanged(); refreshChip(); };
+    sw.append(b);
+  });
+  const row = document.createElement('div'); row.className = 'row';
+  const ren = document.createElement('button'); ren.className = 'lnk'; ren.textContent = 'Rename';
+  ren.onclick = () => { renamingId = sub.id; subjMenuId = null; renderList(); };
+  const del = document.createElement('button'); del.className = 'lnk danger'; del.textContent = 'Delete subject';
+  del.onclick = () => { confirmSubjId = sub.id; renderList(); };
+  row.append(ren, del);
+  m.append(sw, row);
+  if (confirmSubjId === sub.id){
+    const c = document.createElement('div'); c.className = 'confirm';
+    const n = [...notes.values()].filter(x => x.subject === sub.id).length;
+    const msg = document.createElement('span'); msg.textContent = 'Delete “' + sub.name + '”?' + (n === 1 ? ' Its note moves to Unsorted.' : n ? ' Its ' + n + ' notes move to Unsorted.' : '');
+    const y = document.createElement('button'); y.className = 'yes'; y.textContent = 'Delete';
+    const no = document.createElement('button'); no.textContent = 'Cancel';
+    y.onclick = () => deleteSubject(sub.id);
+    no.onclick = () => { confirmSubjId = null; renderList(); };
+    c.append(msg, y, no); m.append(c);
+  }
+  return m;
+}
 function renderList(){
+  // don't rebuild the list while someone is typing a subject name in it
+  const ae = document.activeElement;
+  if (ae && ae.classList && ae.classList.contains('subj-input') && ae.closest('#list')){ listPending = true; return; }
+  listPending = false;
   const q = $('#search').value.trim().toLowerCase();
   const el = $('#list'); el.innerHTML = '';
-  const list = sortedNotes().filter(n => !q || noteTitle(n).toLowerCase().includes(q) || n.blocks.some(b => b.text.toLowerCase().includes(q)));
-  if (!list.length){ el.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">'+(q ? 'No matches' : 'No notes yet')+'</div>'; return; }
-  for (const n of list){
-    const it = document.createElement('div');
-    it.className = 'item' + (n.id === currentId ? ' active' : '');
-    it.tabIndex = 0;
-    const t = document.createElement('div'); t.className = 't'; t.textContent = noteTitle(n);
-    const d = document.createElement('div'); d.className = 'd'; d.textContent = fmtDate(n.updated) + ' · ' + snippet(n);
-    const del = document.createElement('button'); del.className = 'del'; del.textContent = '✕'; del.title = 'Delete note';
-    del.onclick = e => { e.stopPropagation(); confirmId = n.id; renderList(); };
-    it.append(t, d, del);
-    if (confirmId === n.id){
-      const c = document.createElement('div'); c.className = 'confirm';
-      c.innerHTML = '<span>Delete this note?</span>';
-      const y = document.createElement('button'); y.className='yes'; y.textContent='Delete';
-      const no = document.createElement('button'); no.textContent='Cancel';
-      y.onclick = e => { e.stopPropagation(); confirmId = null; removeNote(n.id); };
-      no.onclick = e => { e.stopPropagation(); confirmId = null; renderList(); };
-      c.append(y, no); it.append(c);
+  const all = sortedNotes().filter(n => matchesSearch(n, q));
+  const known = new Set(subjects.map(x => x.id));
+  if (!subjects.length){
+    if (!all.length) el.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">' + (q ? 'No matches' : 'No notes yet') + '</div>';
+    all.forEach(n => el.append(noteItem(n)));
+  } else {
+    for (const sub of subjects){
+      const list = all.filter(n => n.subject === sub.id);
+      if (q && !list.length) continue;
+      const collapsed = sub.collapsed && !q;
+      el.append(sectionHeader({ id: sub.id, name: sub.name, color: sub.color, collapsed, count: list.length, editable: true }));
+      if (subjMenuId === sub.id) el.append(subjectMenu(sub));
+      if (collapsed) continue;
+      const body = document.createElement('div'); body.className = 'sec-body';
+      if (!list.length) body.innerHTML = '<div class="sec-empty">No notes yet. Click + or drag one here.</div>';
+      list.forEach(n => body.append(noteItem(n)));
+      el.append(body);
     }
-    it.onclick = () => { openNote(n.id); $('#side').classList.remove('open'); };
-    it.onkeydown = e => { if (e.key === 'Enter') it.click(); };
-    el.append(it);
+    const loose = all.filter(n => !known.has(n.subject));
+    if (loose.length){
+      const collapsed = unsortedCollapsed && !q;
+      el.append(sectionHeader({ id: '', name: 'Unsorted', color: null, collapsed, count: loose.length, editable: false }));
+      if (!collapsed){ const body = document.createElement('div'); body.className = 'sec-body'; loose.forEach(n => body.append(noteItem(n))); el.append(body); }
+    }
+    if (q && !all.length) el.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">No matches</div>';
   }
+  if (addingSubject){
+    const wrap = document.createElement('div'); wrap.style.marginTop = '10px';
+    wrap.append(textInput('', 'Subject name, e.g. ESC194', val => { addingSubject = false; if (val) addSubject(val); else renderList(); }));
+    el.append(wrap);
+  } else {
+    const add = document.createElement('button'); add.className = 'add-subj'; add.textContent = '+ Add subject';
+    add.onclick = () => { addingSubject = true; renderList(); };
+    el.append(add);
+  }
+  const af = el.querySelector('[data-af]');
+  if (af){ delete af.dataset.af; af.focus(); af.select(); }
+}
+document.addEventListener('focusout', e => { if (listPending && e.target.classList && e.target.classList.contains('subj-input')) setTimeout(renderList, 0); });
+
+function addSubject(name, assignTo){
+  const sub = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name.slice(0, 60), color: COLORS[subjects.length % COLORS.length], collapsed: false };
+  subjects.push(sub);
+  if (assignTo) moveNote(assignTo, sub.id);
+  subjectsChanged();
+  return sub;
+}
+function deleteSubject(id){
+  subjects = subjects.filter(x => x.id !== id);
+  notes.forEach(n => { if (n.subject === id){ n.subject = ''; dirty.add(n.id); } });
+  subjMenuId = null; confirmSubjId = null;
+  subjectsChanged(); refreshChip();
+}
+function moveNote(noteId, subjectId){
+  const n = notes.get(noteId); if (!n || n.subject === subjectId) return;
+  n.subject = subjectId;
+  const sub = subjects.find(x => x.id === subjectId);
+  if (sub && sub.collapsed){ sub.collapsed = false; subjectsDirty = true; }
+  dirty.add(noteId); scheduleSave(); renderList();
+  if (noteId === currentId) refreshChip();
+  toast('Moved to ' + (sub ? sub.name : 'Unsorted'));
+}
+// the "subject" chip above the note title
+function refreshChip(){
+  const chip = $('#subjChip'); if (!chip) return;
+  const n = notes.get(currentId), sub = subjectOf(n);
+  chip.innerHTML = '';
+  const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = sub ? sub.color : 'var(--faint)';
+  const nm = document.createElement('span'); nm.textContent = sub ? sub.name : 'No subject';
+  const ar = document.createElement('span'); ar.textContent = '▾';
+  chip.append(dot, nm, ar);
+}
+function openSubjectMenu(chip){
+  const menu = $('#subjMenu');
+  if (menu.classList.contains('open')){ menu.classList.remove('open'); return; }
+  const n = notes.get(currentId); if (!n) return;
+  menu.innerHTML = '';
+  const opt = (label, color, sid) => {
+    const b = document.createElement('button');
+    b.innerHTML = '<span style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:' + (color || 'var(--faint)') + '"></span><span></span></span>' + ((n.subject || '') === sid ? '<span>✓</span>' : '');
+    b.querySelector('span span:last-child').textContent = label;
+    b.onclick = () => { menu.classList.remove('open'); moveNote(currentId, sid); };
+    menu.append(b);
+  };
+  subjects.forEach(x => opt(x.name, x.color, x.id));
+  opt('No subject', null, '');
+  const wrap = document.createElement('div'); wrap.className = 'new-subj';
+  wrap.append(textInput('', '+ New subject…', val => { menu.classList.remove('open'); if (val) addSubject(val, currentId); }, { autofocus: false, stayOpen: true }));
+  menu.append(wrap);
+  const r = chip.getBoundingClientRect();
+  menu.style.left = Math.min(r.left, window.innerWidth - 220) + 'px';
+  menu.style.top = (r.bottom + 6) + 'px';
+  menu.classList.add('open');
 }
 
 // ---------------- editor ----------------
-function createNote(data){
+function createNote(data, subjectId){
   const id = newId(), now = Date.now();
-  const n = { id, title: data ? data.title : '', blocks: data ? data.blocks : [{type:'text', text:''}], updated: now, created: now };
+  // new notes go in the subject you pass, or the subject of the note you're looking at
+  const subject = subjectId !== undefined ? subjectId : ((notes.get(currentId) || {}).subject || '');
+  const n = { id, title: data ? data.title : '', subject, blocks: data ? data.blocks : [{type:'text', text:''}], updated: now, created: now };
   notes.set(id, n);
   openNote(id);
-  blocks.length && markDirty();
+  markDirty();
   if (mode === 'local') flush();
   setTimeout(() => { if (!data) $('.title').focus(); }, 0);
   return id;
@@ -623,17 +869,20 @@ function openNote(id, keepScroll){
   const c = $('#content');
   c.innerHTML = '';
   const page = document.createElement('div'); page.className = 'page';
+  const chip = document.createElement('button'); chip.className = 'subj-chip'; chip.id = 'subjChip'; chip.title = 'Move this note to another subject';
+  chip.onclick = e => { e.stopPropagation(); openSubjectMenu(chip); };
   const title = document.createElement('input'); title.className = 'title'; title.placeholder = 'Untitled'; title.value = n.title || '';
   title.oninput = () => { n.title = title.value; markDirty(); };
   title.onkeydown = e => { if (e.key === 'Enter' || e.key === 'ArrowDown'){ e.preventDefault(); focusBlock(blocks[0].id, 0); } };
   const meta = document.createElement('div'); meta.className = 'meta'; meta.id = 'meta';
   meta.textContent = 'Plain-text math · press Ctrl+M to make a line math';
   const ed = document.createElement('div'); ed.id = 'editor';
-  page.append(title, meta, ed);
+  page.append(chip, title, meta, ed);
   const filler = document.createElement('div'); filler.style.cssText = 'height:30vh;cursor:text'; filler.onclick = () => clickBelow();
   page.append(filler);
   c.append(page);
   blocks.forEach(b => ed.append(blockEl(b)));
+  refreshChip();
   align();
   renderList();
   updateToolbar();
@@ -1028,7 +1277,7 @@ function wireToolbar(){
   $('#fmtMath').onclick = () => { const c = currentCtx(); if (c) toggleType(c.b.id); else needLine(); };
   document.querySelectorAll('#fmtStyleMenu [data-style]').forEach(btn => btn.onclick = () => { $('#fmtStyleMenu').classList.remove('open'); setStyle(btn.dataset.style === 'math' ? 'math' : +btn.dataset.style); });
   document.querySelectorAll('#fmtSizeMenu [data-size]').forEach(btn => btn.onclick = () => { $('#fmtSizeMenu').classList.remove('open'); setBlockAttr('size', btn.dataset.size); });
-  document.addEventListener('click', e => { if (!e.target.closest('.fmenu') && !e.target.closest('[data-menu]')) document.querySelectorAll('.fmenu.open').forEach(m => m.classList.remove('open')); });
+  document.addEventListener('click', e => { if (!e.target.closest('.fmenu') && !e.target.closest('[data-menu]') && !e.target.closest('#subjChip')) document.querySelectorAll('.fmenu.open').forEach(m => m.classList.remove('open')); });
   $('#scroller').addEventListener('scroll', () => document.querySelectorAll('.fmenu.open').forEach(m => m.classList.remove('open')));
 }
 
@@ -1190,6 +1439,7 @@ function DEMO(){
 // ---------------- wiring ----------------
 $('#newNote').onclick = () => { createNote(); $('#side').classList.remove('open'); };
 $('#search').oninput = renderList;
+$('#list').addEventListener('click', e => { if ((subjMenuId || confirmSubjId) && !e.target.closest('.sec-menu') && !e.target.closest('.sbtn')){ subjMenuId = null; confirmSubjId = null; renderList(); } });
 $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
 $('#cheatBtn').onclick = () => { const o = $('#cheat').classList.toggle('open'); $('#cheatBtn').classList.toggle('on', o); };
 $('#exportBtn').onclick = e => { e.stopPropagation(); $('#exportMenu').classList.toggle('open'); };
@@ -1201,10 +1451,10 @@ $('#exportMenu').onclick = async e => {
   if (act === 'import'){ $('#importFile').value = ''; $('#importFile').click(); return; }
   if (act === 'backup'){
     if (currentId && notes.get(currentId)) notes.get(currentId).blocks = blocks.map(keep);
-    const all = sortedNotes().map(x => ({id:x.id, title:x.title||'', blocks:x.blocks, updated:x.updated, created:x.created||x.updated}));
+    const all = sortedNotes().map(x => ({id:x.id, title:x.title||'', subject:x.subject||'', blocks:x.blocks, updated:x.updated, created:x.created||x.updated}));
     if (!all.length){ toast('No notes to back up'); return; }
     const d = new Date(); const stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-    saveFile('mathpad-backup-' + stamp + '.json', JSON.stringify({app:'mathpad', version:1, notes:all}, null, 1));
+    saveFile('mathpad-backup-' + stamp + '.json', JSON.stringify({app:'mathpad', version:2, subjects, notes:all}, null, 1));
     return;
   }
   const n = notes.get(currentId); if (!n){ toast('Open a note first'); return; }
@@ -1237,11 +1487,15 @@ $('#importFile').onchange = async () => {
     const id = typeof x.id === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(x.id) ? x.id : newId();
     const cur = notes.get(id);
     if (cur && (cur.updated||0) >= (x.updated||0)) continue;
-    notes.set(id, {id, title:String(x.title||''), blocks:x.blocks.map(keep), updated:x.updated||Date.now(), created:x.created||x.updated||Date.now()});
+    notes.set(id, noteFrom(id, Object.assign({}, x, {updated: x.updated || Date.now()})));
     cur ? updated++ : added++;
     dirty.add(id);
   }
-  if (!added && !updated){ toast('Nothing new in that backup'); return; }
+  // bring in any subjects this computer doesn't have yet
+  let newSubjects = 0;
+  if (data && Array.isArray(data.subjects)) cleanSubjects(data.subjects).forEach(x => { if (!subjects.some(y => y.id === x.id)){ subjects.push(x); newSubjects++; } });
+  if (newSubjects) subjectsDirty = true;
+  if (!added && !updated && !newSubjects){ toast('Nothing new in that backup'); return; }
   setStatus('saving','Saving…'); flush();
   renderList();
   const first = sortedNotes()[0]; if (first) openNote(first.id);

@@ -15,6 +15,7 @@ LaTeX looks great but is slow to write during a lecture. Plain text is fast but 
 
 ## Features
 
+- **Subjects.** Group notes into sections like *ESC194* or *PHY180*. Each subject has its own color and folds up in the sidebar, and you can drag notes between them.
 - **Live preview.** Click a line to edit what you typed; click away and it shows as math.
 
   ![Editing a math line, with the live preview underneath](screenshots/live-preview.png)
@@ -110,6 +111,16 @@ Plain text can mean more than one thing, so Mathpad follows a few fixed rules:
 - **Words:** common words like `and`, `if`, `for` and `otherwise` stay as words. Put anything else in quotes: `"area" = l w`.
 - **Escape hatch:** anything starting with `\` goes to LaTeX unchanged, e.g. `\mathcal{L}`.
 
+## Subjects
+
+- **Add a subject:** click **+ Add subject** at the bottom of the sidebar.
+- **New note in a subject:** hover over the subject and click **+**. The **+ New** button at the top uses the subject of the note you have open.
+- **Move a note:** drag it onto another subject, or click the colored subject tag above the note's title and pick one. You can also make a new subject from that tag.
+- **Rename, recolor or delete:** hover over the subject and click **⋯**. Deleting a subject keeps its notes; they move to *Unsorted*.
+- **Fold a subject away:** click its name. Search looks through every subject, folded or not.
+
+Backups include your subjects, so importing on another computer brings back the same sections.
+
 ## Formatting
 
 The toolbar at the top works like Google Docs:
@@ -177,7 +188,7 @@ test/               translator tests
 build/              app icon
 docs/index.html     prebuilt web version for GitHub Pages
 screenshots/        images used in this README
-.github/workflows/  release.yml (Windows app + auto-update), pages.yml (web version)
+.github/workflows/  release.yml: builds the Windows app and publishes updates
 ```
 
 ### How the translator works
@@ -228,10 +239,7 @@ Things to know:
 - Edits to only the README, screenshots or `docs/` don't make a release.
 - To start a new version series, change `"version"` in `package.json` to e.g. `1.2.0`. Releases then count up from 1.2.x. Don't lower it: the updater only installs higher versions.
 - You can also start a release by hand: **Actions → Release Windows app → Run workflow**.
-
-### Publishing the web version
-
-`.github/workflows/pages.yml` rebuilds the web version from `src/` and publishes it on every push. One-time setup: **Settings → Pages → Source: GitHub Actions**. It's then live at `https://<username>.github.io/<repo>/`.
+- **Without GitHub Actions** (for example, if your account can't run them): build on your computer with `node scripts/ci-prepare.js <number> <owner> <repo>`, then `npm run build` and `npx electron-builder --win nsis --x64 --publish never`. Put `git checkout package.json` back afterwards. Then on GitHub, **Releases → Draft a new release**, tag it `v<version>`, and attach `Mathpad-Setup-<version>.exe`, its `.blockmap` and `latest.yml` from `release/`. Installed apps pick it up the same way.
 
 ### Adding new syntax
 
