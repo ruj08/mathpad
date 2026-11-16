@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mathpad — math notes in plain text</title>
+<!--FONTS-->
+<script>window.MathJax = { svg: { fontCache: 'local' }, startup: { typeset: false }, options: { enableMenu: false, enableAssistiveMml: false, menuOptions: { settings: { assistiveMml: false } } } };</script>
+<script src="MATHJAX_URL" async id="mjx"></script>
+<style>
+:root{
+  --paper:#fbfaf6; --panel:#f3f1ea; --line:#e3dfd3; --ink:#1d1c1a; --muted:#77736a; --faint:#a9a59b;
+  --accent:#2747a8; --accent-soft:#e7ecfa; --math-bg:#f6f4ee; --danger:#b3261e; --ok:#2f7a3f;
+  --serif:"Source Serif 4", Georgia, serif; --sans:"IBM Plex Sans", system-ui, sans-serif; --mono:"JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --paper:#1b1b1d; --panel:#141416; --line:#2e2e33; --ink:#ecebe6; --muted:#9a978f; --faint:#66645f;
+    --accent:#8ea8ff; --accent-soft:#232a44; --math-bg:#222226; --danger:#ff8a80; --ok:#7fd18f; }
+}
+*{box-sizing:border-box}
+code,kbd,textarea,.src,.texsrc,.ex code,.emptystate code{font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.app{display:grid;grid-template-columns:260px 1fr auto;height:100vh;height:100dvh}
+
+/* sidebar */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.brand{display:flex;align-items:center;gap:8px;padding:16px 16px 10px;font-weight:600;letter-spacing:.2px}
+.brand .logo{font-family:var(--serif);font-style:italic;font-size:20px;color:var(--accent)}
+.brand .name{font-size:15px}
+.side .tools{display:flex;gap:6px;padding:4px 12px 10px}
+.search{flex:1;min-width:0;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:7px 10px;font:inherit;color:var(--ink);font-size:13.5px}
+.search:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.newbtn{background:var(--accent);color:#fff;border-radius:8px;padding:0 12px;font-weight:500;font-size:13.5px;white-space:nowrap}
+@media (prefers-color-scheme: dark){ .newbtn{color:#10131d} }
+.list{flex:1;overflow:auto;padding:2px 8px 12px}
+.item{position:relative;display:block;width:100%;text-align:left;padding:9px 10px;border-radius:8px;margin-bottom:2px}
+.item:hover{background:color-mix(in srgb,var(--line) 55%,transparent)}
+.item.active{background:var(--paper);box-shadow:0 0 0 1px var(--line)}
+.item .t{font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:22px}
+.item .d{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .del{position:absolute;right:6px;top:8px;opacity:0;color:var(--muted);padding:2px 6px;border-radius:6px;font-size:13px}
+.item:hover .del,.item.active .del{opacity:1}
+.item .del:hover{color:var(--danger);background:var(--paper)}
+.confirm{display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:6px}
+.confirm button{padding:3px 8px;border-radius:6px;border:1px solid var(--line);background:var(--paper)}
+.confirm .yes{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.status{padding:10px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.status .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.status.saved .dot{background:var(--ok)} .status.saving .dot{background:#d9a520} .status.err .dot{background:var(--danger)}
+
+/* main */
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line);min-height:52px}
+.menu-btn{display:none;font-size:18px;padding:4px 8px}
+.topbar .spacer{flex:1}
+/* formatting toolbar */
+.fmt{flex:1;min-width:0;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;transition:opacity .15s}
+.fmt::-webkit-scrollbar{display:none}
+.fmt.idle{opacity:.45}
+.fbtn{height:32px;min-width:30px;padding:0 6px;border-radius:7px;color:var(--ink);font-size:14.5px;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;flex:0 0 auto}
+.fbtn:hover{background:var(--panel)}
+.fbtn.on{background:var(--accent-soft);color:var(--accent)}
+.fbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.fbtn.ddbtn{font-size:13.5px;padding:0 9px;border:1px solid var(--line)}
+#fmtStyleBtn{min-width:106px;justify-content:space-between}
+#fmtSizeBtn{min-width:78px;justify-content:space-between}
+.fsep{width:1px;height:20px;background:var(--line);margin:0 4px;flex:0 0 auto}
+.fmenu{position:fixed;background:var(--paper);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:5px;min-width:170px;z-index:60;display:none}
+.fmenu.open{display:block}
+.fmenu button{display:flex;justify-content:space-between;align-items:center;gap:18px;width:100%;text-align:left;padding:7px 10px;border-radius:7px;font-size:14px;white-space:nowrap}
+.fmenu button:hover{background:var(--panel)}
+.fmenu button.on{color:var(--accent)}
+.fmenu kbd{font-size:10.5px;opacity:.7;white-space:nowrap;font-family:var(--mono);font-weight:400}
+.fmenu .m-h1{font-family:var(--serif);font-size:21px;font-weight:700}
+.fmenu .m-h2{font-family:var(--serif);font-size:18px;font-weight:700}
+.fmenu .m-h3{font-family:var(--serif);font-size:16px;font-weight:600}
+.tbtn{padding:6px 11px;border-radius:7px;font-size:13.5px;color:var(--muted);border:1px solid transparent}
+.tbtn:hover{color:var(--ink);background:var(--panel)}
+.tbtn.on{color:var(--accent);background:var(--accent-soft)}
+.dropdown{position:relative}
+.dropmenu{position:absolute;right:0;top:calc(100% + 6px);background:var(--paper);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;min-width:220px;z-index:20;display:none}
+.dropmenu.open{display:block}
+.dropmenu button{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:7px;font-size:13.5px}
+.dropmenu button:hover{background:var(--panel)}
+.dropmenu .sub{font-size:12px;color:var(--muted)}
+.scroller{flex:1;overflow:auto}
+.page{max-width:780px;margin:0 auto;padding:34px 40px 40vh}
+.title{width:100%;border:0;background:none;font-family:var(--serif);font-size:34px;font-weight:700;color:var(--ink);padding:0;margin:0 0 4px;outline:none}
+.title::placeholder{color:var(--faint)}
+.meta{font-size:12.5px;color:var(--muted);margin-bottom:22px}
+
+/* blocks */
+.blk{position:relative;display:flex;gap:6px;align-items:flex-start;border-radius:8px;margin:1px 0}
+.gutter{flex:0 0 30px;height:28px;margin-top:3px;border-radius:6px;font-size:11px;font-family:var(--mono);color:var(--faint);opacity:0;transition:opacity .12s}
+.blk:hover .gutter,.blk.editing .gutter{opacity:1}
+.gutter:hover{background:var(--panel);color:var(--accent)}
+.blk[data-type="math"] .gutter{color:var(--accent);opacity:.55}
+.blk[data-type="math"]:hover .gutter,.blk[data-type="math"].editing .gutter{opacity:1}
+.body{flex:1;min-width:0}
+.src{display:none;width:100%;resize:none;border:0;outline:none;background:transparent;color:var(--ink);padding:5px 8px;margin:0;line-height:1.6;overflow:hidden}
+.blk[data-type="text"] .src{font-family:var(--serif);font-size:calc(17px * var(--fs))}
+.blk[data-type="math"] .src{font-family:var(--mono);background:var(--math-bg);border-radius:8px;padding:8px 10px;font-size:calc(14.5px * var(--fs))}
+.blk.editing .src{display:block}
+.blk.editing .view{display:none}
+.view{padding:5px 8px;min-height:30px;cursor:text;font-family:var(--serif);font-size:calc(17px * var(--fs));line-height:1.6;overflow-wrap:anywhere}
+.blk[data-type="math"] .view{padding:6px 8px;overflow-x:auto;overflow-y:hidden}
+.view.empty::before{content:attr(data-ph);color:var(--faint)}
+.live{display:none;margin:6px 0 8px;padding:10px 12px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent-soft) 55%,transparent);border-radius:0 8px 8px 0;font-family:var(--serif);font-size:calc(17px * var(--fs));position:relative;overflow-x:auto}
+.blk.editing .live.show{display:block}
+.live .cap{font-family:var(--sans);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;display:flex;gap:10px;align-items:center}
+.live .cap button{font-size:11px;color:var(--accent);text-transform:none;letter-spacing:0;padding:0}
+.live .texsrc{display:none;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap;word-break:break-all}
+.live.showtex .texsrc{display:block}
+
+/* rendered text */
+.view p{margin:0}
+.view h1{font-size:1.6em;margin:14px 0 2px;line-height:1.25}
+.view h2{font-size:1.3em;margin:12px 0 2px;line-height:1.3}
+.view h3{font-size:1.1em;margin:8px 0 0}
+.view u{text-underline-offset:3px;text-decoration-thickness:1px}
+/* block size & alignment */
+.blk{--fs:1}
+.blk[data-size="s"]{--fs:.85} .blk[data-size="l"]{--fs:1.25} .blk[data-size="xl"]{--fs:1.6}
+.blk[data-h="1"] .src{font-size:calc(17px * 1.6 * var(--fs));font-weight:700;line-height:1.3}
+.blk[data-h="2"] .src{font-size:calc(17px * 1.3 * var(--fs));font-weight:700;line-height:1.35}
+.blk[data-h="3"] .src{font-size:calc(17px * 1.1 * var(--fs));font-weight:600}
+.blk[data-align="center"] .view,.blk[data-align="center"] .src,.blk[data-align="center"] .live .out{text-align:center}
+.blk[data-align="right"] .view,.blk[data-align="right"] .src,.blk[data-align="right"] .live .out{text-align:right}
+.blk[data-align="center"] .mrow{justify-content:center}
+.blk[data-align="right"] .mrow{justify-content:flex-end}
+.blk[data-align="center"] .view ul,.blk[data-align="center"] .view ol,.blk[data-align="right"] .view ul,.blk[data-align="right"] .view ol{list-style-position:inside;padding-left:0}
+.view ul,.view ol{margin:0;padding-left:24px}
+.view blockquote{margin:0;padding-left:12px;border-left:3px solid var(--line);color:var(--muted)}
+.view hr{border:0;border-top:1px solid var(--line);margin:12px 0}
+.view mark{background:#fff0a8;color:inherit;padding:0 2px;border-radius:3px}
+@media (prefers-color-scheme: dark){ .view mark{background:#5a4d12} }
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:6px 12px;border-radius:0 8px 8px 0}
+.callout .lab{font-weight:700;color:var(--accent);margin-right:4px}
+.callout.proof{border-color:var(--faint);background:transparent}
+.callout.proof .lab{color:var(--ink);font-style:italic;font-weight:600}
+.mrow{display:flex;align-items:baseline;white-space:nowrap;padding:1px 0}
+.mrow .lhs{display:inline-block;text-align:right}
+.mrow .rhs{display:inline-block}
+mjx-container{font-size:1.06em}
+.mrow mjx-container{font-size:1.12em}
+mjx-container svg{overflow:visible}
+mjx-assistive-mml{display:none!important}
+.mathfail{font-family:var(--mono);font-size:13px;color:var(--danger)}
+
+/* empty state */
+.emptystate{max-width:520px;margin:12vh auto 0;text-align:center;padding:0 24px}
+.emptystate h2{font-family:var(--serif);font-size:30px;margin:0 0 10px}
+.emptystate p{color:var(--muted);line-height:1.6;margin:0 0 20px}
+.emptystate .demo{margin:0 auto 24px;background:var(--math-bg);border-radius:12px;padding:14px 18px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;align-items:center}
+.emptystate .demo code{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.btnrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.btn{padding:9px 16px;border-radius:9px;border:1px solid var(--line);background:var(--paper);font-weight:500}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+@media (prefers-color-scheme: dark){ .btn.primary{color:#10131d} }
+
+/* cheat sheet */
+.cheat{width:330px;border-left:1px solid var(--line);background:var(--panel);overflow:auto;display:none}
+.cheat.open{display:block}
+.cheat .head{position:sticky;top:0;background:var(--panel);padding:16px 18px 10px;border-bottom:1px solid var(--line);z-index:1}
+.cheat h3{margin:0 0 4px;font-size:15px}
+.cheat .hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+.cheat .sec{padding:10px 18px 4px}
+.cheat .sec h4{margin:6px 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+.ex{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;width:100%;text-align:left;padding:6px 8px;border-radius:7px}
+.ex:hover{background:var(--paper)}
+.ex code{font-family:var(--mono);font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.ex .r{text-align:right;font-family:var(--serif)}
+.ex .r mjx-container{font-size:.98em}
+.keys{font-size:12.5px;color:var(--muted);line-height:1.8;padding:4px 18px 24px}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--paper);color:var(--ink)}
+
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:9px;font-size:13.5px;opacity:0;transition:.2s;pointer-events:none;z-index:50}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+.modal.open{display:flex}
+.modal .box{background:var(--paper);border-radius:12px;padding:16px;width:min(680px,100%);max-height:80vh;display:flex;flex-direction:column;gap:10px}
+.modal textarea{flex:1;min-height:300px;font-family:var(--mono);font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--panel);color:var(--ink)}
+.loading{padding:40px;text-align:center;color:var(--muted)}
+
+@media (max-width: 900px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;inset:0 auto 0 0;width:270px;z-index:30;transform:translateX(-100%);transition:transform .2s}
+  .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.2)}
+  .menu-btn{display:inline-block}
+  .cheat{position:fixed;inset:0 0 0 auto;width:min(340px,92vw);z-index:30;box-shadow:0 0 40px rgba(0,0,0,.2)}
+  .page{padding:24px 16px 40vh}
+  .gutter{opacity:.5}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><span class="logo">∂</span><span class="name">Mathpad</span></div>
+    <div class="tools">
+      <input class="search" id="search" placeholder="Search notes" aria-label="Search notes">
+      <button class="newbtn" id="newNote">+ New</button>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Loading…</span></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="Notes">☰</button>
+      <div class="fmt idle" id="fmt" role="toolbar" aria-label="Formatting">
+        <button class="fbtn ddbtn" id="fmtStyleBtn" data-menu="fmtStyleMenu" title="Text style"><span id="fmtStyleLabel">Normal text</span><span>▾</span></button>
+        <button class="fbtn ddbtn" id="fmtSizeBtn" data-menu="fmtSizeMenu" title="Size (Ctrl+Shift+. / Ctrl+Shift+,)"><span id="fmtSizeLabel">Normal</span><span>▾</span></button>
+        <span class="fsep"></span>
+        <button class="fbtn" data-wrap="**" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="fbtn" data-wrap="*" title="Italic (Ctrl+I)"><i style="font-family:var(--serif);font-size:16px">I</i></button>
+        <button class="fbtn" data-wrap="__" title="Underline (Ctrl+U)"><u>U</u></button>
+        <button class="fbtn" data-wrap="~~" title="Strikethrough (Alt+Shift+5)"><s>S</s></button>
+        <button class="fbtn" data-wrap="==" title="Highlight"><svg viewBox="0 0 24 24"><path d="M9 11l-5 5v3h3l5-5M14 6l4 4M9 11l5-5 4 4-5 5z"/><path d="M4 21h16" stroke-width="2.4" style="stroke:#e9c13b"/></svg></button>
+        <span class="fsep"></span>
+        <button class="fbtn" data-align="left" title="Align left (Ctrl+Shift+L)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
+        <button class="fbtn" data-align="center" title="Center (Ctrl+Shift+E)"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button>
+        <button class="fbtn" data-align="right" title="Align right (Ctrl+Shift+R)"><svg viewBox="0 0 24 24"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button>
+        <span class="fsep"></span>
+        <button class="fbtn" id="fmtUl" data-list="ul" title="Bulleted list (Ctrl+Shift+8)"><svg viewBox="0 0 24 24"><path d="M9 7h11M9 12h11M9 17h11"/><circle cx="4.5" cy="7" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="17" r="1" fill="currentColor"/></svg></button>
+        <button class="fbtn" id="fmtOl" data-list="ol" title="Numbered list (Ctrl+Shift+7)"><svg viewBox="0 0 24 24"><path d="M10 7h10M10 12h10M10 17h10"/><path d="M4 5.5l1.2-.7V9M3.8 14.5c.4-.6 1.8-.7 1.8.3 0 .8-1.8 1.7-1.8 2.7h2" stroke-width="1.3"/></svg></button>
+        <button class="fbtn" id="fmtMath" title="Make this a math line (Ctrl+M)" style="font-family:var(--serif);font-size:16px">∑</button>
+      </div>
+      <button class="tbtn" id="cheatBtn" title="How to type math">Math help</button>
+      <div class="dropdown">
+        <button class="tbtn" id="exportBtn">Export ▾</button>
+        <div class="dropmenu" id="exportMenu">
+          <button data-act="copy-latex">Copy as LaTeX<div class="sub">Full document, paste into Overleaf</div></button>
+          <button data-act="copy-md">Copy as Markdown<div class="sub">Works in Obsidian, Notion, GitHub</div></button>
+          <button data-act="dl-md" id="dlMd" hidden>Save as .md file</button>
+          <button data-act="dl-tex" id="dlTex" hidden>Save as .tex file</button>
+          <div style="border-top:1px solid var(--line);margin:6px 4px"></div>
+          <button data-act="backup" id="backupBtn" hidden>Back up all notes<div class="sub">One .json file with every note</div></button>
+          <button data-act="import">Import notes…<div class="sub">From a Mathpad backup (.json)</div></button>
+        </div>
+      </div>
+    </div>
+    <div class="scroller" id="scroller">
+      <div id="content"><div class="loading">Loading your notes…</div></div>
+    </div>
+  </main>
+
+  <aside class="cheat" id="cheat">
+    <div class="head">
+      <h3>Type math like you'd text it</h3>
+      <div class="hint">Make a line math with <kbd>Ctrl</kbd>+<kbd>M</kbd>, the ∑ button, or by starting it with <kbd>$$</kbd>. In normal text, wrap math in <kbd>$…$</kbd>. Click an example to add it to your note.</div>
+    </div>
+    <div id="cheatBody"></div>
+    <div class="keys">
+      <b>Keys</b><br>
+      <kbd>Enter</kbd> new line (math stays math)<br>
+      <kbd>Enter</kbd> on an empty math line → back to text<br>
+      <kbd>Shift</kbd>+<kbd>Enter</kbd> line break inside a block<br>
+      <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>M</kbd> switch text ↔ math<br>
+      <kbd>↑</kbd> <kbd>↓</kbd> move between lines<br>
+      Start a math line with <code>=</code> to line it up under the line above.<br>
+      <br><b>Formatting</b> (same shortcuts as Google Docs)<br>
+      <kbd>Ctrl</kbd>+<kbd>B</kbd> bold · <kbd>Ctrl</kbd>+<kbd>I</kbd> italic · <kbd>Ctrl</kbd>+<kbd>U</kbd> underline<br>
+      <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>5</kbd> strikethrough<br>
+      <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>3</kbd> headings, <kbd>0</kbd> normal text<br>
+      <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> / <kbd>E</kbd> / <kbd>R</kbd> left / center / right<br>
+      <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> / <kbd>,</kbd> bigger / smaller<br>
+      <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>8</kbd> bullets · <kbd>7</kbd> numbers<br>
+      You can also type the marks yourself: <code>**bold**</code> <code>*italic*</code> <code>__underline__</code> <code>~~strike~~</code> <code>==highlight==</code> <code># Heading</code> <code>- bullet</code>, plus labels like <code>Definition:</code>, <code>Theorem:</code>, <code>Proof:</code><br>
+      Escape hatch: anything starting with <code>\</code> is passed to LaTeX as-is, e.g. <code>\mathcal{L}</code>. Quotes make words: <code>"area" = l w</code>.
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+<div class="fmenu" id="fmtStyleMenu">
+  <button data-style="0">Normal text <kbd>Ctrl+Alt+0</kbd></button>
+  <button data-style="1" class="m-h1">Heading 1 <kbd>Ctrl+Alt+1</kbd></button>
+  <button data-style="2" class="m-h2">Heading 2 <kbd>Ctrl+Alt+2</kbd></button>
+  <button data-style="3" class="m-h3">Heading 3 <kbd>Ctrl+Alt+3</kbd></button>
+  <button data-style="math">∑ Math line <kbd>Ctrl+M</kbd></button>
+</div>
+<div class="fmenu" id="fmtSizeMenu">
+  <button data-size="s" style="font-size:12.5px">Small</button>
+  <button data-size="m">Normal</button>
+  <button data-size="l" style="font-size:17px">Large</button>
+  <button data-size="xl" style="font-size:21px">Huge</button>
+</div>
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+<div class="modal" id="modal"><div class="box">
+  <div style="display:flex;align-items:center;gap:10px"><b id="modalTitle">Export</b><span class="spacer" style="flex:1"></span><button class="btn" id="modalClose">Close</button></div>
+  <div style="font-size:12.5px;color:var(--muted)">Your browser blocked copying, so here it is — select all and copy.</div>
+  <textarea id="modalText" readonly></textarea>
+</div></div>
+
+<script>
+/*MATHPARSE*/
+</script>
+<script>
+(function(){
+'use strict';
+const $ = s => document.querySelector(s);
+const DESKTOP = !!window.MATHPAD_DESKTOP;
+const LOCAL_LABEL = DESKTOP ? 'Saved on this computer' : 'Saved in this browser only';
+const SESSION = Math.random().toString(36).slice(2);
+const LS_KEY = 'mathpad.notes.v1';
+
+// ---------------- rendering helpers ----------------
+function escHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let mjReady = false;
+const kxCache = new Map();
+function kx(tex, display){
+  if (!mjReady) return '<span class="mathfail">'+escHtml(tex)+'</span>';
+  const key = (display ? 'D' : 'I') + tex;
+  if (kxCache.has(key)) return kxCache.get(key);
+  let html;
+  try {
+    const node = MathJax.tex2svg(tex, {display: !!display});
+    if (node.querySelector('[data-mjx-error]')) html = '<span class="mathfail" title="Could not read this">'+escHtml(tex)+'</span>';
+    else html = node.outerHTML;
+  } catch(e){ html = '<span class="mathfail">'+escHtml(tex)+'</span>'; }
+  if (kxCache.size > 3000) kxCache.clear();
+  kxCache.set(key, html);
+  return html;
+}
+function whenMath(){
+  return new Promise(resolve => {
+    let tries = 0;
+    const check = () => {
+      if (window.MathJax && MathJax.startup && MathJax.startup.promise && MathJax.tex2svg){ MathJax.startup.promise.then(() => { try { document.head.appendChild(MathJax.svgStylesheet()); } catch(e){} mjReady = true; resolve(true); }); return; }
+      if (++tries > 150){ resolve(false); return; }
+      setTimeout(check, 100);
+    };
+    check();
+  });
+}
+const T = s => MathParse.toTex(s);
+
+// split text into plain parts and $math$ parts
+function splitMath(s){
+  const parts = [];
+  let i = 0, buf = '';
+  while (i < s.length){
+    const c = s[i];
+    if (c === '\\' && s[i+1] === '$'){ buf += '$'; i += 2; continue; }
+    if (c === '$'){
+      const j = s.indexOf('$', i+1);
+      if (j > i+1){ parts.push({t:'txt', v:buf}); buf=''; parts.push({t:'math', v:s.slice(i+1,j)}); i = j+1; continue; }
+    }
+    buf += c; i++;
+  }
+  parts.push({t:'txt', v:buf});
+  return parts;
+}
+function inline(s){
+  return splitMath(s).map(p => p.t === 'math' ? kx(T(p.v), false) : richText(p.v, HTML_OUT)).join('');
+}
+// **bold**  *italic*  __underline__  ~~strike~~  ==highlight==  (nest freely)
+const FMT_PATTERNS = [
+  ['bi', /\*\*\*(?=\S)(.+?)\*\*\*/],
+  ['b',  /\*\*(?=\S)(.+?)\*\*/],
+  ['u',  /__(?=\S)(.+?)__/],
+  ['s',  /~~(?=\S)(.+?)~~/],
+  ['h',  /==(?=\S)(.+?)==/],
+  ['i',  /(?<![*\w])\*(?=[^\s*])(.+?)\*(?![*\w])/],
+];
+const HAS_FMT = /\$[^$]+\$|\*\S|__\S|~~\S|==\S/;
+function richText(s, out){
+  let best = null;
+  for (const [k, re] of FMT_PATTERNS){ const m = re.exec(s); if (m && (!best || m.index < best.m.index)) best = {k, m}; }
+  if (!best) return out.esc(s);
+  const m = best.m;
+  return out.esc(s.slice(0, m.index)) + out[best.k](richText(m[1], out)) + richText(s.slice(m.index + m[0].length), out);
+}
+const HTML_OUT = { esc: s => escHtml(s), bi: x => '<b><i>'+x+'</i></b>', b: x => '<b>'+x+'</b>', i: x => '<i>'+x+'</i>', u: x => '<u>'+x+'</u>', s: x => '<s>'+x+'</s>', h: x => '<mark>'+x+'</mark>' };
+const CALLOUT = /^(definition|def|theorem|thm|lemma|corollary|proof|example|ex|note|claim|rule|formula|remember|tip|key idea|warning|q|question|answer|ans)\s*[:.]\s*/i;
+
+function renderText(text){
+  const lines = text.split('\n');
+  let html = '', list = null;
+  const closeList = () => { if (list){ html += '</'+list+'>'; list = null; } };
+  for (const line of lines){
+    let m;
+    if ((m = /^(#{1,3})\s+(.*)$/.exec(line))){ closeList(); const n=m[1].length; html += '<h'+n+'>'+inline(m[2])+'</h'+n+'>'; continue; }
+    if (/^\s*(---|___|\*\*\*)\s*$/.test(line)){ closeList(); html += '<hr>'; continue; }
+    if ((m = /^(\s*)[-*•]\s+(.*)$/.exec(line))){
+      if (list !== 'ul'){ closeList(); html += '<ul>'; list='ul'; }
+      const ind = Math.min(6, Math.floor(m[1].replace(/\t/g,'  ').length/2));
+      html += '<li style="margin-left:'+(ind*22)+'px">'+inline(m[2])+'</li>'; continue;
+    }
+    if ((m = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(line))){
+      if (list !== 'ol'){ closeList(); html += '<ol start="'+m[2]+'">'; list='ol'; }
+      const ind = Math.min(6, Math.floor(m[1].length/2));
+      html += '<li value="'+m[2]+'" style="margin-left:'+(ind*22)+'px">'+inline(m[3])+'</li>'; continue;
+    }
+    closeList();
+    if ((m = /^>\s?(.*)$/.exec(line))){ html += '<blockquote>'+inline(m[1])+'</blockquote>'; continue; }
+    if ((m = CALLOUT.exec(line))){
+      const label = line.slice(0, m[0].length).trim();
+      const isProof = /^proof/i.test(label);
+      html += '<div class="callout'+(isProof?' proof':'')+'"><span class="lab">'+escHtml(label)+'</span>'+inline(line.slice(m[0].length))+'</div>'; continue;
+    }
+    html += '<p>'+(line.trim() ? inline(line) : '&nbsp;')+'</p>';
+  }
+  closeList();
+  return html;
+}
+function mathRows(text){
+  return text.split('\n').filter(l => l.trim()).map(l => {
+    const p = MathParse.toTexParts(l);
+    return p;
+  });
+}
+function renderMath(text){
+  const rows = mathRows(text);
+  if (!rows.length) return '';
+  return rows.map(r => '<div class="mrow" data-cont="'+(r.lhs ? 0 : r.rel ? 1 : 0)+'"><span class="lhs">'+(r.lhs ? kx('\\displaystyle '+r.lhs, false) : '')+'</span><span class="rhs">'+(r.rhs ? kx('\\displaystyle {}'+r.rhs, false) : '')+'</span></div>').join('');
+}
+
+// a stored block: type + text, plus optional alignment and size
+function keep(b){
+  b = b || {};
+  const o = { type: b.type === 'math' ? 'math' : 'text', text: String(b.text || '') };
+  if (b.align === 'center' || b.align === 'right') o.align = b.align;
+  if (b.size === 's' || b.size === 'l' || b.size === 'xl') o.size = b.size;
+  return o;
+}
+
+// ---------------- state ----------------
+let notes = new Map();      // id -> {id,title,blocks:[{type,text}],updated,created}
+let currentId = null;
+let mode = 'loading';       // 'db' | 'local'
+let db = null, col = null, downloads = null;
+const dirty = new Set(), saving = new Set(), pending = new Set();
+let saveTimer = null;
+let blocks = [];            // working copy for current note: [{id,type,text}]
+let bid = 0;
+const newBid = () => 'b' + (++bid);
+const newId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+
+function setStatus(kind, text){
+  const el = $('#status'); el.className = 'status ' + kind; $('#statusText').textContent = text;
+}
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+// ---------------- persistence ----------------
+function payload(n){ return { title: n.title || '', blocks: n.blocks.map(keep), updated: n.updated, created: n.created || n.updated, by: SESSION }; }
+function markDirty(){
+  const n = notes.get(currentId); if (!n) return;
+  n.blocks = blocks.map(keep);
+  n.updated = Date.now();
+  dirty.add(currentId);
+  setStatus('saving', 'Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 700);
+  renderList();
+}
+function flush(){
+  if (mode === 'local'){
+    try {
+      const all = {}; notes.forEach((n,id) => all[id] = payload(n));
+      localStorage.setItem(LS_KEY, JSON.stringify(all));
+      dirty.clear(); setStatus('saved', LOCAL_LABEL);
+    } catch(e){ setStatus('err', 'Could not save in this browser'); }
+    return;
+  }
+  [...dirty].forEach(saveNote);
+}
+async function saveNote(id){
+  if (saving.has(id)){ pending.add(id); return; }
+  const n = notes.get(id); if (!n){ dirty.delete(id); return; }
+  saving.add(id); dirty.delete(id);
+  try {
+    await col.doc(id).set(payload(n));
+    if (!dirty.size && !pending.size) setStatus('saved', 'All changes saved');
+  } catch(e){
+    dirty.add(id);
+    if (e && e.code === 'quota_exceeded') setStatus('err', 'Storage full — delete old notes');
+    else if (e && e.code === 'invalid_argument') setStatus('err', 'Note too large or not allowed to save');
+    else { setStatus('err', 'Not saved — retrying'); setTimeout(()=>{ if (dirty.has(id)) saveNote(id); }, 2500 + Math.random()*1500); }
+  } finally {
+    saving.delete(id);
+    if (pending.has(id)){ pending.delete(id); saveNote(id); }
+  }
+}
+async function removeNote(id){
+  notes.delete(id); dirty.delete(id);
+  if (currentId === id){ currentId = null; const first = sortedNotes()[0]; if (first) openNote(first.id); else renderEmpty(); }
+  renderList();
+  if (mode === 'local'){ flush(); return; }
+  try { await col.doc(id).delete(); setStatus('saved','All changes saved'); } catch(e){ setStatus('err','Could not delete'); }
+}
+
+async function init(){
+  let user = null;
+  try {
+    if (window.claude && typeof window.claude.use === 'function'){
+      const timeout = new Promise(r => setTimeout(() => r([null,null,null]), 10000));
+      [db, user, downloads] = await Promise.race([Promise.all([claude.use('db'), claude.use('user'), claude.use('downloads')]), timeout]);
+    }
+  } catch(e){ db = null; }
+  // Inside claude.ai, files are saved through the downloads capability; everywhere else a normal download works.
+  const canSave = !!downloads || !window.claude;
+  if (canSave){ $('#dlMd').hidden = false; $('#backupBtn').hidden = false; }
+  if (!window.claude) $('#dlTex').hidden = false;
+  let uid = null;
+  try { uid = user ? await user.id() : null; } catch(e){}
+  if (db && uid){
+    mode = 'db';
+    col = db.collection('data/users/' + uid);
+    let first = true;
+    const loadTimer = setTimeout(() => { if (first){ setStatus('err', "Can't reach saved notes yet…"); } }, 10000);
+    col.onSnapshot(snap => {
+      if (!snap.metadata.fromCache && first){ clearTimeout(loadTimer); }
+      let currentChanged = false;
+      snap.docChanges().forEach(ch => {
+        const id = ch.doc.id;
+        if (ch.type === 'removed'){ if (!dirty.has(id)) notes.delete(id); if (id === currentId) currentChanged = 'removed'; return; }
+        const d = ch.doc.data() || {};
+        if (d.by === SESSION && notes.has(id)) return;          // our own write echoing back
+        if (dirty.has(id) || saving.has(id)) return;             // local edits win
+        notes.set(id, { id, title: d.title || '', blocks: Array.isArray(d.blocks) ? d.blocks.map(keep) : [], updated: d.updated || 0, created: d.created || 0 });
+        if (id === currentId) currentChanged = true;
+      });
+      if (first){
+        if (!snap.metadata.fromCache || snap.size) {
+          first = snap.metadata.fromCache ? first : false;
+        }
+        setStatus('saved', 'All changes saved');
+        if (!currentId){ const n = sortedNotes()[0]; if (n) openNote(n.id); else if (!snap.metadata.fromCache) renderEmpty(); }
+      } else {
+        if (currentChanged === 'removed'){ currentId = null; const n = sortedNotes()[0]; if (n) openNote(n.id); else renderEmpty(); }
+        else if (currentChanged && !document.querySelector('.blk.editing') && document.activeElement !== $('.title')) openNote(currentId, true);
+      }
+      renderList();
+    }, err => {
+      clearTimeout(loadTimer);
+      setStatus('err', 'Saved notes unavailable — using this browser');
+      fallbackLocal();
+    });
+  } else {
+    fallbackLocal();
+  }
+}
+function fallbackLocal(){
+  mode = 'local';
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw){ const all = JSON.parse(raw); Object.keys(all).forEach(id => { const d = all[id]; if (!notes.has(id)) notes.set(id, {id, title:d.title||'', blocks:d.blocks||[], updated:d.updated||0, created:d.created||0}); }); }
+  } catch(e){}
+  setStatus('saved', LOCAL_LABEL);
+  renderList();
+  if (!currentId){ const n = sortedNotes()[0]; if (n) openNote(n.id); else renderEmpty(); }
+}
+
+// ---------------- sidebar ----------------
+const sortedNotes = () => [...notes.values()].sort((a,b) => (b.updated||0) - (a.updated||0));
+function noteTitle(n){
+  if (n.title && n.title.trim()) return n.title.trim();
+  const h = (n.blocks||[]).find(b => b.text.trim());
+  return h ? h.text.replace(/^#+\s*/,'').split('\n')[0].slice(0,60) : 'Untitled';
+}
+function snippet(n){
+  const bs = (n.blocks||[]).filter(b => b.text.trim());
+  const b = bs.find(x => x.text.trim() && x.text.replace(/^#+\s*/,'').split('\n')[0].slice(0,60) !== noteTitle(n)) || bs[0];
+  return b ? b.text.split('\n')[0].replace(/^#+\s*/, '') : 'Empty note';
+}
+function fmtDate(t){
+  if (!t) return '';
+  const d = new Date(t), now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  return d.toLocaleDateString([], {month:'short', day:'numeric'});
+}
+let confirmId = null;
+function renderList(){
+  const q = $('#search').value.trim().toLowerCase();
+  const el = $('#list'); el.innerHTML = '';
+  const list = sortedNotes().filter(n => !q || noteTitle(n).toLowerCase().includes(q) || n.blocks.some(b => b.text.toLowerCase().includes(q)));
+  if (!list.length){ el.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">'+(q ? 'No matches' : 'No notes yet')+'</div>'; return; }
+  for (const n of list){
+    const it = document.createElement('div');
+    it.className = 'item' + (n.id === currentId ? ' active' : '');
+    it.tabIndex = 0;
+    const t = document.createElement('div'); t.className = 't'; t.textContent = noteTitle(n);
+    const d = document.createElement('div'); d.className = 'd'; d.textContent = fmtDate(n.updated) + ' · ' + snippet(n);
+    const del = document.createElement('button'); del.className = 'del'; del.textContent = '✕'; del.title = 'Delete note';
+    del.onclick = e => { e.stopPropagation(); confirmId = n.id; renderList(); };
+    it.append(t, d, del);
+    if (confirmId === n.id){
+      const c = document.createElement('div'); c.className = 'confirm';
+      c.innerHTML = '<span>Delete this note?</span>';
+      const y = document.createElement('button'); y.className='yes'; y.textContent='Delete';
+      const no = document.createElement('button'); no.textContent='Cancel';
+      y.onclick = e => { e.stopPropagation(); confirmId = null; removeNote(n.id); };
+      no.onclick = e => { e.stopPropagation(); confirmId = null; renderList(); };
+      c.append(y, no); it.append(c);
+    }
+    it.onclick = () => { openNote(n.id); $('#side').classList.remove('open'); };
+    it.onkeydown = e => { if (e.key === 'Enter') it.click(); };
+    el.append(it);
+  }
+}
+
+// ---------------- editor ----------------
+function createNote(data){
+  const id = newId(), now = Date.now();
+  const n = { id, title: data ? data.title : '', blocks: data ? data.blocks : [{type:'text', text:''}], updated: now, created: now };
+  notes.set(id, n);
+  openNote(id);
+  blocks.length && markDirty();
+  if (mode === 'local') flush();
+  setTimeout(() => { if (!data) $('.title').focus(); }, 0);
+  return id;
+}
+
+function openNote(id, keepScroll){
+  const n = notes.get(id); if (!n) return;
+  currentId = id;
+  lastSel = null;
+  blocks = (n.blocks && n.blocks.length ? n.blocks : [{type:'text', text:''}]).map(b => Object.assign({id:newBid()}, keep(b)));
+  const sc = $('#scroller').scrollTop;
+  const c = $('#content');
+  c.innerHTML = '';
+  const page = document.createElement('div'); page.className = 'page';
+  const title = document.createElement('input'); title.className = 'title'; title.placeholder = 'Untitled'; title.value = n.title || '';
+  title.oninput = () => { n.title = title.value; markDirty(); };
+  title.onkeydown = e => { if (e.key === 'Enter' || e.key === 'ArrowDown'){ e.preventDefault(); focusBlock(blocks[0].id, 0); } };
+  const meta = document.createElement('div'); meta.className = 'meta'; meta.id = 'meta';
+  meta.textContent = 'Plain-text math · press Ctrl+M to make a line math';
+  const ed = document.createElement('div'); ed.id = 'editor';
+  page.append(title, meta, ed);
+  const filler = document.createElement('div'); filler.style.cssText = 'height:30vh;cursor:text'; filler.onclick = () => clickBelow();
+  page.append(filler);
+  c.append(page);
+  blocks.forEach(b => ed.append(blockEl(b)));
+  align();
+  renderList();
+  updateToolbar();
+  if (keepScroll) $('#scroller').scrollTop = sc; else $('#scroller').scrollTop = 0;
+}
+function clickBelow(){
+  const last = blocks[blocks.length-1];
+  if (last && !last.text.trim()) focusBlock(last.id, 0);
+  else { const b = {id:newBid(), type:'text', text:''}; blocks.push(b); $('#editor').append(blockEl(b)); focusBlock(b.id, 0); markDirty(); }
+}
+
+function renderEmpty(){
+  currentId = null; blocks = []; lastSel = null; updateToolbar();
+  const ex = [['x^2/3', 'x^2/3'], ['sqrt(b^2 - 4ac)', 'sqrt(b^2 - 4ac)'], ['int_0^1 x^2 dx', 'int_0^1 x^2 dx'], ['lim x->0 sin(x)/x', 'lim x->0 sin(x)/x']];
+  $('#content').innerHTML = '<div class="emptystate"><h2>Math notes without the LaTeX</h2><p>Type math the way you would in a text message. It turns into real notation as you go, and you can still export proper LaTeX when you need it.</p>'
+   + '<div class="demo">' + ex.map(e => '<code>'+escHtml(e[0])+'</code><span>'+kx(T(e[1]),false)+'</span>').join('') + '</div>'
+   + '<div class="btnrow"><button class="btn primary" id="esNew">Start a note</button><button class="btn" id="esDemo">Open an example note</button><button class="btn" id="esImport">Import a backup</button></div></div>';
+  $('#esNew').onclick = () => createNote();
+  $('#esDemo').onclick = () => createNote(DEMO());
+  $('#esImport').onclick = () => { $('#importFile').value = ''; $('#importFile').click(); };
+  renderList();
+}
+
+function blockEl(b){
+  const el = document.createElement('div');
+  el.className = 'blk'; el.dataset.id = b.id; el.dataset.type = b.type;
+  const g = document.createElement('button'); g.className = 'gutter'; g.tabIndex = -1;
+  g.title = 'Switch text / math (Ctrl+M)';
+  g.textContent = b.type === 'math' ? '∑' : 'Tx';
+  g.onmousedown = e => e.preventDefault();
+  g.onclick = () => toggleType(b.id);
+  const body = document.createElement('div'); body.className = 'body';
+  const ta = document.createElement('textarea'); ta.className = 'src'; ta.rows = 1; ta.value = b.text;
+  ta.spellcheck = b.type === 'text';
+  ta.placeholder = b.type === 'math' ? 'math, e.g.  int_0^1 x^2 dx = 1/3' : 'Type notes… use $x^2$ for inline math';
+  const view = document.createElement('div'); view.className = 'view';
+  const live = document.createElement('div'); live.className = 'live';
+  body.append(ta, view, live);
+  el.append(g, body);
+  applyAttrs(el, b);
+  paintView(el, b);
+  view.addEventListener('mousedown', e => {
+    if (e.target.closest('a')) return;
+    e.preventDefault();
+    focusBlock(b.id, b.text.length);
+  });
+  ta.addEventListener('input', () => onInput(b, el, ta));
+  ta.addEventListener('keydown', e => onKey(e, b, el, ta));
+  ta.addEventListener('paste', e => onPaste(e, b, el, ta));
+  ta.addEventListener('focus', () => { el.classList.add('editing'); autosize(ta); paintLive(el, b); rememberSel(b, ta); });
+  ta.addEventListener('blur', () => { rememberSel(b, ta); el.classList.remove('editing'); paintView(el, b); align(); setTimeout(updateToolbar, 0); });
+  ['keyup', 'mouseup', 'select'].forEach(ev => ta.addEventListener(ev, () => rememberSel(b, ta)));
+  return el;
+}
+function applyAttrs(el, b){
+  el.dataset.align = b.align || 'left';
+  el.dataset.size = b.size || 'm';
+  const hm = b.type === 'text' && !b.text.includes('\n') ? /^(#{1,3})\s/.exec(b.text) : null;
+  el.dataset.h = hm ? hm[1].length : '';
+}
+function paintView(el, b){
+  const view = el.querySelector('.view');
+  const isLast = blocks[blocks.length-1] === b;
+  if (!b.text.trim()){
+    view.innerHTML = ''; view.classList.add('empty');
+    view.dataset.ph = b.type === 'math' ? 'empty math line' : (blocks.length === 1 || isLast ? 'Click to write…' : '');
+    return;
+  }
+  view.classList.remove('empty');
+  view.innerHTML = b.type === 'math' ? renderMath(b.text) : renderText(b.text);
+}
+function paintLive(el, b){
+  const live = el.querySelector('.live');
+  const show = b.type === 'math' ? !!b.text.trim() : HAS_FMT.test(b.text);
+  live.classList.toggle('show', show);
+  if (!show){ live.innerHTML = ''; return; }
+  const wasTex = live.classList.contains('showtex');
+  let html, tex;
+  if (b.type === 'math'){
+    const rows = b.text.split('\n').filter(l => l.trim());
+    tex = rows.map(T).join(' \\\\\n');
+    html = rows.map(r => '<div>'+kx('\\displaystyle '+T(r), false)+'</div>').join('');
+  } else {
+    html = renderText(b.text);
+    tex = '';
+    b.text.replace(/\$([^$]+)\$/g, (m, x) => { tex += (tex ? '\n' : '') + T(x); });
+  }
+  live.innerHTML = '<div class="cap"><span>Preview</span><button class="showtex">'+(wasTex?'hide':'show')+' LaTeX</button><button class="copytex">copy LaTeX</button></div><div class="out">'+html+'</div><div class="texsrc"></div>';
+  live.querySelector('.texsrc').textContent = tex;
+  live.querySelector('.showtex').onmousedown = e => { e.preventDefault(); live.classList.toggle('showtex'); paintLive(el, b); };
+  live.querySelector('.copytex').onmousedown = e => { e.preventDefault(); copy(tex, 'LaTeX'); };
+}
+function autosize(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+const elOf = id => document.querySelector('.blk[data-id="'+id+'"]');
+const idx = id => blocks.findIndex(b => b.id === id);
+
+function focusBlock(id, caret){
+  const el = elOf(id); if (!el) return;
+  const ta = el.querySelector('.src');
+  el.classList.add('editing');
+  autosize(ta);
+  ta.focus({preventScroll:true});
+  const pos = caret === undefined ? ta.value.length : Math.min(caret, ta.value.length);
+  ta.setSelectionRange(pos, pos);
+  const r = el.getBoundingClientRect(), sr = $('#scroller').getBoundingClientRect();
+  if (r.bottom > sr.bottom - 80 || r.top < sr.top + 10) el.scrollIntoView({block:'center', behavior:'smooth'});
+}
+function insertAfter(id, nb){
+  const i = idx(id);
+  blocks.splice(i+1, 0, nb);
+  const el = blockEl(nb);
+  elOf(id).after(el);
+  return el;
+}
+function setType(b, el, type){
+  b.type = type; el.dataset.type = type;
+  el.querySelector('.gutter').textContent = type === 'math' ? '∑' : 'Tx';
+  const ta = el.querySelector('.src');
+  ta.spellcheck = type === 'text';
+  ta.placeholder = type === 'math' ? 'math, e.g.  int_0^1 x^2 dx = 1/3' : 'Type notes… use $x^2$ for inline math';
+  applyAttrs(el, b); autosize(ta); paintLive(el, b); paintView(el, b); updateToolbar();
+}
+function toggleType(id){
+  const b = blocks[idx(id)], el = elOf(id);
+  setType(b, el, b.type === 'math' ? 'text' : 'math');
+  markDirty();
+  focusBlock(id);
+}
+
+function onInput(b, el, ta){
+  b.text = ta.value;
+  if (/^\$\$\s?/.test(b.text)){
+    b.text = b.text.replace(/^\$\$\s?/, ''); ta.value = b.text;
+    setType(b, el, 'math'); ta.setSelectionRange(b.text.length, b.text.length);
+  }
+  applyAttrs(el, b); autosize(ta); paintLive(el, b); markDirty(); rememberSel(b, ta);
+}
+
+function onKey(e, b, el, ta){
+  if (e.isComposing) return;
+  const pos = ta.selectionStart, end = ta.selectionEnd, v = ta.value;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 'm' || e.key === 'M')){ e.preventDefault(); toggleType(b.id); return; }
+  if (handleFormatKey(e)) return;
+  if (e.key === 'Enter' && !e.shiftKey && !mod){
+    e.preventDefault();
+    // empty math line -> turns back into text
+    if (b.type === 'math' && !v.trim()){ setType(b, el, 'text'); markDirty(); return; }
+    const before = v.slice(0, pos), after = v.slice(end);
+    const curLine = before.split('\n').pop();
+    let prefix = '';
+    let m;
+    if (b.type === 'text'){
+      if ((m = /^(\s*)([-*•])\s+(.*)$/.exec(curLine))){
+        if (!m[3].trim() && !after.trim()){ b.text = before.slice(0, before.length - curLine.length) + m[1].slice(2); ta.value = b.text; autosize(ta); paintLive(el,b); markDirty(); return; }
+        prefix = m[1] + m[2] + ' ';
+      } else if ((m = /^(\s*)(\d+)([.)])\s+(.*)$/.exec(curLine))){
+        if (!m[4].trim() && !after.trim()){ b.text = before.slice(0, before.length - curLine.length); ta.value = b.text; autosize(ta); paintLive(el,b); markDirty(); return; }
+        prefix = m[1] + (parseInt(m[2],10)+1) + m[3] + ' ';
+      }
+    }
+    b.text = before; ta.value = before; autosize(ta);
+    const nb = Object.assign({id:newBid()}, keep({type:b.type, text: prefix + after, align:b.align, size:b.size}));
+    insertAfter(b.id, nb);
+    markDirty();
+    focusBlock(nb.id, prefix.length);
+    return;
+  }
+  if (e.key === 'Backspace' && pos === 0 && end === 0){
+    const i = idx(b.id);
+    if (b.type === 'math' && v){ e.preventDefault(); setType(b, el, 'text'); markDirty(); return; }
+    if (i === 0){ if (b.type === 'math'){ e.preventDefault(); setType(b, el, 'text'); markDirty(); } return; }
+    const prev = blocks[i-1];
+    if (!v){ e.preventDefault(); blocks.splice(i,1); el.remove(); markDirty(); focusBlock(prev.id); return; }
+    if (prev.type === 'text' && b.type === 'text'){
+      e.preventDefault();
+      const caret = prev.text.length;
+      prev.text = prev.text + v; const pel = elOf(prev.id); pel.querySelector('.src').value = prev.text;
+      blocks.splice(i,1); el.remove(); markDirty(); focusBlock(prev.id, caret); return;
+    }
+    return;
+  }
+  if (e.key === 'ArrowUp' && !e.shiftKey && !v.slice(0, pos).includes('\n')){
+    const i = idx(b.id);
+    e.preventDefault();
+    if (i > 0) focusBlock(blocks[i-1].id); else $('.title').focus();
+    return;
+  }
+  if (e.key === 'ArrowDown' && !e.shiftKey && !v.slice(end).includes('\n')){
+    const i = idx(b.id);
+    if (i < blocks.length - 1){ e.preventDefault(); focusBlock(blocks[i+1].id, 0); }
+    return;
+  }
+  if (e.key === 'Tab'){
+    e.preventDefault();
+    if (b.type === 'text'){
+      const ls = v.lastIndexOf('\n', pos - 1) + 1;
+      if (e.shiftKey){ if (v.startsWith('  ', ls)){ ta.value = v.slice(0, ls) + v.slice(ls + 2); ta.setSelectionRange(Math.max(ls, pos-2), Math.max(ls, pos-2)); } }
+      else { ta.value = v.slice(0, ls) + '  ' + v.slice(ls); ta.setSelectionRange(pos+2, pos+2); }
+      onInput(b, el, ta);
+    }
+    return;
+  }
+  if (e.key === 'Escape'){ ta.blur(); }
+}
+function onPaste(e, b, el, ta){
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text || !text.includes('\n')) return;
+  e.preventDefault();
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const pos = ta.selectionStart, end = ta.selectionEnd, v = ta.value;
+  const before = v.slice(0, pos), after = v.slice(end);
+  const toBlock = l => /^\$\$\s?/.test(l) ? {type:'math', text:l.replace(/^\$\$\s?/, '').replace(/\$\$\s*$/, '')} : {type:null, text:l};
+  const first = toBlock(lines[0]);
+  b.text = before + first.text; ta.value = b.text; autosize(ta);
+  let lastId = b.id;
+  for (let k = 1; k < lines.length; k++){
+    const p = toBlock(lines[k]);
+    const nb = Object.assign({id:newBid()}, keep({type: p.type || 'text', text: p.text + (k === lines.length - 1 ? after : ''), align:b.align, size:b.size}));
+    insertAfter(lastId, nb); lastId = nb.id;
+  }
+  markDirty();
+  focusBlock(lastId, (blocks[idx(lastId)].text.length - after.length));
+}
+
+// ---------------- formatting toolbar ----------------
+let lastSel = null;   // {id, s, e}: where the cursor was, so toolbar clicks know which line to change
+function rememberSel(b, ta){ lastSel = { id: b.id, s: ta.selectionStart, e: ta.selectionEnd }; updateToolbar(); }
+function currentCtx(){
+  // the block being edited (or the one edited last), with its cursor restored
+  let el = document.querySelector('.blk.editing');
+  if (!el && lastSel) el = elOf(lastSel.id);
+  if (!el) return null;
+  const b = blocks[idx(el.dataset.id)];
+  if (!b) return null;
+  const ta = el.querySelector('.src');
+  if (document.activeElement !== ta){
+    focusBlock(b.id);
+    if (lastSel && lastSel.id === b.id) ta.setSelectionRange(Math.min(lastSel.s, ta.value.length), Math.min(lastSel.e, ta.value.length));
+  }
+  return { b, el, ta };
+}
+const needLine = () => { toast('Click into a line first'); return null; };
+// replace text in a textarea and keep Ctrl+Z working
+function replaceRange(c, start, end, text, selS, selE){
+  const { b, el, ta } = c;
+  ta.focus();
+  ta.setSelectionRange(start, end);
+  let ok = false;
+  if (text || start !== end){
+    try { ok = text ? document.execCommand('insertText', false, text) : document.execCommand('delete'); } catch(_){}
+    if (!ok){ ta.setRangeText(text, start, end, 'end'); onInput(b, el, ta); }
+  }
+  if (selS !== undefined) ta.setSelectionRange(selS, selE === undefined ? selS : selE);
+  rememberSel(b, ta);
+}
+function toggleWrap(marker){
+  const c = currentCtx(); if (!c) return needLine();
+  if (c.b.type === 'math'){ toast('Bold, italic and underline are for text lines'); return; }
+  const v = c.ta.value, m = marker.length, ch = marker[0];
+  let s = c.ta.selectionStart, e = c.ta.selectionEnd;
+  while (s < e && /\s/.test(v[s])) s++;
+  while (e > s && /\s/.test(v[e-1])) e--;
+  // a marker that isn't part of a longer run (so * doesn't match half of **)
+  const exactAt = p => v.slice(p, p + m) === marker && v[p-1] !== ch && v[p + m] !== ch;
+  if (s === e){
+    if (v.slice(s - m, s) === marker && v.slice(s, s + m) === marker) return replaceRange(c, s - m, s + m, '', s - m);
+    return replaceRange(c, s, s, marker + marker, s + m);
+  }
+  if (s >= m && exactAt(s - m) && exactAt(e)) return replaceRange(c, s - m, e + m, v.slice(s, e), s - m, e - m);
+  const sel = v.slice(s, e);
+  if (sel.length > 2 * m && exactAt(s) && exactAt(e - m)) return replaceRange(c, s, e, sel.slice(m, -m), s, e - 2 * m);
+  // wrap each line separately, after any heading / list marker
+  const wrapLine = l => l.replace(/^(\s*(?:#{1,3}|[-*•]|\d+[.)])\s+)?(.*?)(\s*)$/, (_, pre, body, tail) => (pre || '') + (body ? marker + body + marker : '') + tail);
+  const out = sel.includes('\n') || /^(\s*(?:#{1,3}|[-*•]|\d+[.)])\s+)/.test(sel) ? sel.split('\n').map(wrapLine).join('\n') : marker + sel + marker;
+  if (out === marker + sel + marker) replaceRange(c, s, e, out, s + m, e + m);
+  else replaceRange(c, s, e, out, s, s + out.length);
+}
+function lineBounds(v, s, e){
+  const ls = v.lastIndexOf('\n', s - 1) + 1;
+  let le = v.indexOf('\n', Math.max(s, e - (e > s && v[e-1] === '\n' ? 1 : 0)));
+  if (le < 0) le = v.length;
+  return [ls, le];
+}
+const PREFIX = /^(\s*)(#{1,3}\s+|[-*•]\s+|\d+[.)]\s+)/;
+function setStyle(level){        // 0 = normal text, 1-3 = heading, 'math' = math line
+  const c = currentCtx(); if (!c) return needLine();
+  if (level === 'math'){ if (c.b.type !== 'math') toggleType(c.b.id); return; }
+  if (c.b.type === 'math'){ setType(c.b, c.el, 'text'); markDirty(); }
+  const v = c.ta.value, [ls, le] = lineBounds(v, c.ta.selectionStart, c.ta.selectionEnd);
+  const text = v.slice(ls, le).split('\n').map(l => {
+    const t = l.replace(PREFIX, '$1').trimStart();
+    return level && t ? '#'.repeat(level) + ' ' + t : t;
+  }).join('\n');
+  replaceRange(c, ls, le, text, ls + text.length);
+}
+function toggleList(kind){
+  const c = currentCtx(); if (!c) return needLine();
+  if (c.b.type === 'math'){ setType(c.b, c.el, 'text'); markDirty(); }
+  const v = c.ta.value, [ls, le] = lineBounds(v, c.ta.selectionStart, c.ta.selectionEnd);
+  const lines = v.slice(ls, le).split('\n');
+  const re = kind === 'ul' ? /^\s*[-*•]\s+/ : /^\s*\d+[.)]\s+/;
+  const filled = lines.filter(l => l.trim());
+  const isList = filled.length > 0 && filled.every(l => re.test(l));
+  let n = 0;
+  const text = lines.map(l => {
+    if (!l.trim() && lines.length > 1) return l;
+    const ind = /^\s*/.exec(l)[0], t = l.replace(PREFIX, '$1').trimStart();
+    if (isList) return ind + t;
+    n++;
+    return ind + (kind === 'ul' ? '- ' : n + '. ') + t;
+  }).join('\n');
+  replaceRange(c, ls, le, text, ls + text.length);
+}
+const SIZES = ['s', 'm', 'l', 'xl'], SIZE_NAME = { s: 'Small', m: 'Normal', l: 'Large', xl: 'Huge' };
+function setBlockAttr(key, val){
+  const c = currentCtx(); if (!c) return needLine();
+  if (!val || (key === 'align' && val === 'left') || (key === 'size' && val === 'm')) delete c.b[key]; else c.b[key] = val;
+  applyAttrs(c.el, c.b); autosize(c.ta); paintLive(c.el, c.b); markDirty(); updateToolbar();
+}
+function stepSize(dir){
+  const c = currentCtx(); if (!c) return needLine();
+  const i = SIZES.indexOf(c.b.size || 'm');
+  setBlockAttr('size', SIZES[Math.max(0, Math.min(SIZES.length - 1, i + dir))]);
+}
+function inMarker(line, caret, marker){
+  // is the cursor between an opening and closing marker on this line?
+  const before = line.slice(0, caret);
+  if (marker === '*'){ const singles = before.replace(/\*\*/g, '').split('*').length - 1; return singles % 2 === 1; }
+  return (before.split(marker).length - 1) % 2 === 1;
+}
+function updateToolbar(){
+  const bar = $('#fmt'); if (!bar) return;
+  let el = document.querySelector('.blk.editing');
+  if (!el && lastSel) el = elOf(lastSel.id);
+  const b = el ? blocks[idx(el.dataset.id)] : null;
+  bar.classList.toggle('idle', !b);
+  bar.querySelectorAll('.on').forEach(x => x.classList.remove('on'));
+  if (!b){ $('#fmtStyleLabel').textContent = 'Normal text'; $('#fmtSizeLabel').textContent = 'Normal'; return; }
+  const ta = el.querySelector('.src'), v = ta.value;
+  const caret = lastSel && lastSel.id === b.id ? lastSel.s : ta.selectionStart;
+  const ls = v.lastIndexOf('\n', caret - 1) + 1, line = v.slice(ls).split('\n')[0];
+  const hm = /^(#{1,3})\s/.exec(line);
+  $('#fmtStyleLabel').textContent = b.type === 'math' ? '∑ Math line' : hm ? 'Heading ' + hm[1].length : 'Normal text';
+  $('#fmtSizeLabel').textContent = SIZE_NAME[b.size || 'm'];
+  bar.querySelector('[data-align="' + (b.align || 'left') + '"]').classList.add('on');
+  if (b.type === 'math'){ $('#fmtMath').classList.add('on'); return; }
+  if (/^\s*[-*•]\s/.test(line)) $('#fmtUl').classList.add('on');
+  if (/^\s*\d+[.)]\s/.test(line)) $('#fmtOl').classList.add('on');
+  bar.querySelectorAll('[data-wrap]').forEach(x => { if (inMarker(line, caret - ls, x.dataset.wrap)) x.classList.add('on'); });
+}
+// Google Docs shortcuts
+function handleFormatKey(e){
+  const mod = e.ctrlKey || e.metaKey;
+  const act = f => { e.preventDefault(); f(); return true; };
+  if (mod && !e.shiftKey && !e.altKey){
+    const k = e.key.toLowerCase();
+    if (k === 'b') return act(() => toggleWrap('**'));
+    if (k === 'i') return act(() => toggleWrap('*'));
+    if (k === 'u') return act(() => toggleWrap('__'));
+  }
+  if (mod && e.shiftKey && !e.altKey){
+    if (e.code === 'KeyL') return act(() => setBlockAttr('align', 'left'));
+    if (e.code === 'KeyE') return act(() => setBlockAttr('align', 'center'));
+    if (e.code === 'KeyR') return act(() => setBlockAttr('align', 'right'));
+    if (e.code === 'Digit7') return act(() => toggleList('ol'));
+    if (e.code === 'Digit8') return act(() => toggleList('ul'));
+    if (e.code === 'Period') return act(() => stepSize(1));
+    if (e.code === 'Comma') return act(() => stepSize(-1));
+  }
+  if (mod && e.altKey && !e.shiftKey && /^Digit[0-3]$/.test(e.code)) return act(() => setStyle(+e.code.slice(5)));
+  if (e.altKey && e.shiftKey && !mod && e.code === 'Digit5') return act(() => toggleWrap('~~'));
+  return false;
+}
+function openMenu(btn){
+  const menu = $('#' + btn.dataset.menu);
+  const wasOpen = menu.classList.contains('open');
+  document.querySelectorAll('.fmenu.open').forEach(m => m.classList.remove('open'));
+  if (wasOpen) return;
+  const r = btn.getBoundingClientRect();
+  menu.style.left = Math.min(r.left, window.innerWidth - 200) + 'px';
+  menu.style.top = (r.bottom + 6) + 'px';
+  menu.classList.add('open');
+}
+function wireToolbar(){
+  // mousedown preventDefault keeps the cursor in the note while clicking toolbar buttons
+  document.querySelectorAll('#fmt button, .fmenu button').forEach(btn => btn.addEventListener('mousedown', e => e.preventDefault()));
+  document.querySelectorAll('#fmt [data-menu]').forEach(btn => btn.onclick = e => { e.stopPropagation(); openMenu(btn); });
+  document.querySelectorAll('#fmt [data-wrap]').forEach(btn => btn.onclick = () => toggleWrap(btn.dataset.wrap));
+  document.querySelectorAll('#fmt [data-align]').forEach(btn => btn.onclick = () => setBlockAttr('align', btn.dataset.align));
+  document.querySelectorAll('#fmt [data-list]').forEach(btn => btn.onclick = () => toggleList(btn.dataset.list));
+  $('#fmtMath').onclick = () => { const c = currentCtx(); if (c) toggleType(c.b.id); else needLine(); };
+  document.querySelectorAll('#fmtStyleMenu [data-style]').forEach(btn => btn.onclick = () => { $('#fmtStyleMenu').classList.remove('open'); setStyle(btn.dataset.style === 'math' ? 'math' : +btn.dataset.style); });
+  document.querySelectorAll('#fmtSizeMenu [data-size]').forEach(btn => btn.onclick = () => { $('#fmtSizeMenu').classList.remove('open'); setBlockAttr('size', btn.dataset.size); });
+  document.addEventListener('click', e => { if (!e.target.closest('.fmenu') && !e.target.closest('[data-menu]')) document.querySelectorAll('.fmenu.open').forEach(m => m.classList.remove('open')); });
+  $('#scroller').addEventListener('scroll', () => document.querySelectorAll('.fmenu.open').forEach(m => m.classList.remove('open')));
+}
+
+// line up derivations: a math row starting with "=" lines up under the "=" of the row above it
+function align(){
+  const ed = $('#editor'); if (!ed) return;
+  const els = [...ed.querySelectorAll('.blk')];
+  ed.querySelectorAll('.mrow .lhs').forEach(l => l.style.minWidth = '');
+  let rows = [];
+  const finish = () => {
+    let i = 0;
+    while (i < rows.length){
+      if (rows[i].dataset.cont === '1' && i > 0 && rows[i-1].dataset.cont !== '1'){
+        const chain = [rows[i-1]];
+        while (i < rows.length && rows[i].dataset.cont === '1'){ chain.push(rows[i]); i++; }
+        const w = Math.max(...chain.map(r => r.querySelector('.lhs').getBoundingClientRect().width));
+        chain.forEach(r => r.querySelector('.lhs').style.minWidth = w + 'px');
+      } else i++;
+    }
+    rows = [];
+  };
+  for (const el of els){
+    if (el.dataset.type === 'math' && !el.classList.contains('editing')) rows.push(...el.querySelectorAll('.mrow'));
+    else finish();
+  }
+  finish();
+}
+
+// ---------------- export ----------------
+const texEscText = s => s.replace(/\\/g,'\\textbackslash{}').replace(/([#$%&_{}])/g,'\\$1').replace(/~/g,'\\textasciitilde{}').replace(/\^/g,'\\textasciicircum{}');
+const TEX_OUT = { esc: texEscText, bi: x => '\\textbf{\\emph{'+x+'}}', b: x => '\\textbf{'+x+'}', i: x => '\\emph{'+x+'}', u: x => '\\uline{'+x+'}', s: x => '\\sout{'+x+'}', h: x => '\\colorbox{yellow!40}{'+x+'}' };
+const MD_OUT = { esc: s => s, bi: x => '***'+x+'***', b: x => '**'+x+'**', i: x => '*'+x+'*', u: x => '<u>'+x+'</u>', s: x => '~~'+x+'~~', h: x => '=='+x+'==' };
+function inlineToLatex(s){ return splitMath(s).map(p => p.t === 'math' ? '$' + T(p.v) + '$' : richText(p.v, TEX_OUT)).join(''); }
+function inlineToMd(s){ return splitMath(s).map(p => p.t === 'math' ? '$' + T(p.v) + '$' : richText(p.v, MD_OUT)).join(''); }
+const TEX_SIZE = { s: '\\small', l: '\\large', xl: '\\LARGE' };
+function mathGroups(bs){
+  // consecutive math blocks -> groups of rows
+  const out = []; let cur = null;
+  for (const b of bs){
+    if (b.type === 'math'){ if (!cur){ cur = {type:'math', rows:[]}; out.push(cur); } b.text.split('\n').filter(l=>l.trim()).forEach(l => cur.rows.push(MathParse.toTexParts(l))); }
+    else { cur = null; out.push(b); }
+  }
+  return out;
+}
+function textBlockToLatex(text){
+  const out = [];
+  let list = null;
+  const close = () => { if (list){ out.push('\\end{'+list+'}'); list = null; } };
+  for (const line of text.split('\n')){
+    let m;
+    if ((m = /^(#{1,3})\s+(.*)$/.exec(line))){ close(); out.push('\\' + ['section*','subsection*','subsubsection*'][m[1].length-1] + '{' + inlineToLatex(m[2]) + '}'); continue; }
+    if ((m = /^\s*[-*•]\s+(.*)$/.exec(line))){ if (list !== 'itemize'){ close(); out.push('\\begin{itemize}'); list='itemize'; } out.push('  \\item ' + inlineToLatex(m[1])); continue; }
+    if ((m = /^\s*\d+[.)]\s+(.*)$/.exec(line))){ if (list !== 'enumerate'){ close(); out.push('\\begin{enumerate}'); list='enumerate'; } out.push('  \\item ' + inlineToLatex(m[1])); continue; }
+    close();
+    if (/^\s*---\s*$/.test(line)){ out.push('\\hrulefill'); continue; }
+    if ((m = CALLOUT.exec(line))){ out.push('\\textbf{' + texEscText(line.slice(0, m[0].length).trim()) + '} ' + inlineToLatex(line.slice(m[0].length)), ''); continue; }
+    out.push(line.trim() ? inlineToLatex(line.replace(/^>\s?/, '')) : '', '');
+  }
+  close();
+  return out;
+}
+function exportLatex(n){
+  const lines = ['\\documentclass{article}','\\usepackage{amsmath,amssymb,mathtools}','\\usepackage[margin=1in]{geometry}','\\usepackage[normalem]{ulem}','\\usepackage{xcolor}','\\setlength{\\parindent}{0pt}','\\setlength{\\parskip}{6pt}','','\\title{'+texEscText(noteTitle(n))+'}','\\date{}','','\\begin{document}','\\maketitle',''];
+  const groups = mathGroups(n.blocks);
+  for (let k = 0; k < groups.length; k++){
+    const g = groups[k];
+    if (g.type === 'math'){
+      const cont = g.rows.some(r => !r.lhs && r.rel);
+      if (cont && g.rows.length > 1) lines.push('\\begin{align*}', g.rows.map(r => '  ' + (r.lhs || '') + ' &' + (r.rhs || '')).join(' \\\\\n'), '\\end{align*}');
+      else g.rows.forEach(r => lines.push('\\[ ' + [r.lhs, r.rhs].filter(Boolean).join(' ') + ' \\]'));
+      continue;
+    }
+    let text = g.text;
+    while (k + 1 < groups.length && groups[k + 1].type === 'text' && (groups[k + 1].align || '') === (g.align || '') && (groups[k + 1].size || '') === (g.size || '')) text += '\n' + groups[++k].text;
+    let body = textBlockToLatex(text);
+    if (g.size) body = ['{' + TEX_SIZE[g.size]].concat(body, ['\\par}']);
+    if (g.align === 'center') body = ['\\begin{center}'].concat(body, ['\\end{center}']);
+    if (g.align === 'right') body = ['\\begin{flushright}'].concat(body, ['\\end{flushright}']);
+    lines.push(...body);
+  }
+  lines.push('', '\\end{document}');
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+function exportMd(n){
+  const out = ['# ' + noteTitle(n), ''];
+  for (const g of mathGroups(n.blocks)){
+    if (g.type === 'math'){
+      const cont = g.rows.some(r => !r.lhs && r.rel);
+      if (cont && g.rows.length > 1) out.push('$$', '\\begin{aligned}', g.rows.map(r => (r.lhs||'') + ' &' + (r.rhs||'')).join(' \\\\\n'), '\\end{aligned}', '$$', '');
+      else g.rows.forEach(r => out.push('$$', [r.lhs, r.rhs].filter(Boolean).join(' '), '$$', ''));
+      continue;
+    }
+    const md = g.text.split('\n').map(inlineToMd).join('\n');
+    if (g.align === 'center' || g.align === 'right') out.push('<div align="' + g.align + '">', '', md, '', '</div>', '');
+    else out.push(md, '');
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+async function copy(text, label){
+  try { await navigator.clipboard.writeText(text); toast(label + ' copied'); }
+  catch(e){ $('#modalTitle').textContent = label; $('#modalText').value = text; $('#modal').classList.add('open'); setTimeout(()=>$('#modalText').select(), 50); }
+}
+
+// ---------------- cheat sheet ----------------
+const CHEAT = [
+  ['Basics', ['x^2 + 3x - 4 = 0', '(x+1)/(x-1)', '1/2 x  vs  1/2x', 'x != 0, x <= 5', '3 * 4 +- 2', 'a_n, x_1, x1', 'e^(i pi) + 1 = 0', '10% of 30deg']],
+  ['Roots & functions', ['sqrt(b^2 - 4ac)', 'cbrt(27), root(4, 16)', 'sin^2 x + cos^2 x = 1', 'log_2 8 = 3', 'ln|x|', 'abs(x - 3), floor(x)', "f'(x), f(g(x))", 'n!, n choose k']],
+  ['Calculus', ['dy/dx = 3x^2', 'd/dx (x^2)', 'd^2y/dx^2', 'partial f/partial x', 'int x^2 dx', 'int from 0 to 1 x^2 dx', 'int_0^pi sin x dx', 'lim x->0 sin(x)/x', 'lim x->0+ ln x', 'lim of (1+1/n)^n as n -> inf', 'sum i=1 to n i^2', 'sum_(k=0)^inf x^k/k!']],
+  ['Greek, sets & logic', ['alpha, beta, theta, pi, Delta', 'x in RR, ZZ, NN', '{x | x > 0}', 'A union B, A intersect B', 'P(A|B)', 'x > 0 implies x^2 > 0', 'forall x exists y']],
+  ['Vectors & matrices', ['vec(v) = <1, 2, 3>', 'u dot v, u cross v', '||v||', '[1, 2; 3, 4]', 'A^T, A^-1, det(A)', 'hat(i), bar(x)']],
+  ['Piecewise', ['f(x) = {x^2 if x > 0; 0 otherwise}']],
+];
+function renderCheat(){
+  $('#cheatBody').innerHTML = CHEAT.map(([h, items]) => '<div class="sec"><h4>'+h+'</h4>' + items.map(s => {
+    const parts = s.split('  vs  ');
+    const r = parts.map(p => kx(T(p), false)).join(' &nbsp;vs&nbsp; ');
+    return '<button class="ex" data-s="'+escHtml(parts[0])+'"><code>'+escHtml(s)+'</code><span class="r">'+r+'</span></button>';
+  }).join('') + '</div>').join('');
+  $('#cheatBody').querySelectorAll('.ex').forEach(btn => {
+    btn.onmousedown = e => e.preventDefault();
+    btn.onclick = () => insertExample(btn.dataset.s);
+  });
+}
+function insertExample(s){
+  if (!currentId){ createNote(); }
+  const active = document.querySelector('.blk.editing');
+  let anchor = active ? active.dataset.id : blocks[blocks.length-1].id;
+  const ab = blocks[idx(anchor)];
+  if (ab && !ab.text.trim()){ ab.text = s; const el = elOf(ab.id); el.querySelector('.src').value = s; setType(ab, el, 'math'); markDirty(); focusBlock(ab.id); return; }
+  const nb = {id:newBid(), type:'math', text:s};
+  insertAfter(anchor, nb); markDirty(); focusBlock(nb.id);
+}
+
+// ---------------- demo note ----------------
+function DEMO(){
+  const t = s => ({type:'text', text:s}), m = s => ({type:'math', text:s});
+  return { title: 'Example: Calculus cheat notes', blocks: [
+    t('Click any line to see exactly what was typed. Lines marked ∑ are math lines; in normal text, math goes between dollar signs, like $x^2/3$.'),
+    t('## Derivatives'),
+    m('d/dx (x^n) = n x^(n-1)'),
+    m('d/dx sin x = cos x'),
+    t('Chain rule: $d/dx f(g(x)) = f\'(g(x)) g\'(x)$'),
+    t('## Integrals'),
+    m('int x^n dx = x^(n+1)/(n+1) + C'),
+    m('int_0^1 x^2 dx = 1/3'),
+    t('Definition: $f$ is continuous at $a$ if $lim x->a f(x) = f(a)$.'),
+    t('## A derivation that lines up'),
+    m('(x+1)^2 = (x+1)(x+1)'),
+    m('= x^2 + x + x + 1'),
+    m('= x^2 + 2x + 1'),
+    t('## Grab bag'),
+    t('- quadratic formula: $x = (-b +- sqrt(b^2 - 4ac))/(2a)$\n- **Basel problem** below\n- matrices: commas between entries, semicolons between rows'),
+    m('sum n=1 to inf 1/n^2 = pi^2/6'),
+    m('A = [1, 2; 3, 4], det(A) = -2'),
+    m('f(x) = {x^2 if x >= 0; -x otherwise}'),
+  ]};
+}
+
+// ---------------- wiring ----------------
+$('#newNote').onclick = () => { createNote(); $('#side').classList.remove('open'); };
+$('#search').oninput = renderList;
+$('#menuBtn').onclick = () => $('#side').classList.toggle('open');
+$('#cheatBtn').onclick = () => { const o = $('#cheat').classList.toggle('open'); $('#cheatBtn').classList.toggle('on', o); };
+$('#exportBtn').onclick = e => { e.stopPropagation(); $('#exportMenu').classList.toggle('open'); };
+document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) $('#exportMenu').classList.remove('open'); if (!e.target.closest('#side') && !e.target.closest('#menuBtn')) $('#side').classList.remove('open'); });
+$('#exportMenu').onclick = async e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  $('#exportMenu').classList.remove('open');
+  const act = btn.dataset.act;
+  if (act === 'import'){ $('#importFile').value = ''; $('#importFile').click(); return; }
+  if (act === 'backup'){
+    if (currentId && notes.get(currentId)) notes.get(currentId).blocks = blocks.map(keep);
+    const all = sortedNotes().map(x => ({id:x.id, title:x.title||'', blocks:x.blocks, updated:x.updated, created:x.created||x.updated}));
+    if (!all.length){ toast('No notes to back up'); return; }
+    const d = new Date(); const stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    saveFile('mathpad-backup-' + stamp + '.json', JSON.stringify({app:'mathpad', version:1, notes:all}, null, 1));
+    return;
+  }
+  const n = notes.get(currentId); if (!n){ toast('Open a note first'); return; }
+  n.blocks = blocks.map(keep);
+  const fname = noteTitle(n).replace(/[^\w\- ]+/g,'').trim() || 'note';
+  if (act === 'copy-latex') copy(exportLatex(n), 'LaTeX');
+  if (act === 'copy-md') copy(exportMd(n), 'Markdown');
+  if (act === 'dl-md') saveFile(fname + '.md', exportMd(n));
+  if (act === 'dl-tex') saveFile(fname + '.tex', exportLatex(n));
+};
+async function saveFile(filename, data){
+  if (downloads){
+    try { await downloads.save({filename, data}); }
+    catch(err){ if (err && err.code !== 'declined') toast('Saving files is not available here'); }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([data], {type:'application/octet-stream'}));
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+$('#importFile').onchange = async () => {
+  const f = $('#importFile').files[0]; if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch(e){ toast("That file isn't a Mathpad backup"); return; }
+  const list = Array.isArray(data) ? data : (data && Array.isArray(data.notes) ? data.notes : null);
+  if (!list){ toast("That file isn't a Mathpad backup"); return; }
+  let added = 0, updated = 0;
+  for (const x of list){
+    if (!x || !Array.isArray(x.blocks)) continue;
+    const id = typeof x.id === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(x.id) ? x.id : newId();
+    const cur = notes.get(id);
+    if (cur && (cur.updated||0) >= (x.updated||0)) continue;
+    notes.set(id, {id, title:String(x.title||''), blocks:x.blocks.map(keep), updated:x.updated||Date.now(), created:x.created||x.updated||Date.now()});
+    cur ? updated++ : added++;
+    dirty.add(id);
+  }
+  if (!added && !updated){ toast('Nothing new in that backup'); return; }
+  setStatus('saving','Saving…'); flush();
+  renderList();
+  const first = sortedNotes()[0]; if (first) openNote(first.id);
+  toast('Imported ' + added + ' new' + (updated ? ', updated ' + updated : '') + ' note' + (added + updated === 1 ? '' : 's'));
+};
+$('#modalClose').onclick = () => $('#modal').classList.remove('open');
+window.addEventListener('beforeunload', () => { if (dirty.size) flush(); });
+window.addEventListener('resize', () => align());
+
+wireToolbar();
+try { if (!localStorage.getItem('mathpad.seenCheat') && window.innerWidth > 900){ $('#cheat').classList.add('open'); $('#cheatBtn').classList.add('on'); localStorage.setItem('mathpad.seenCheat','1'); } } catch(e){}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(align);
+whenMath().then(ok => {
+  if (!ok) toast('Math renderer failed to load — showing raw math');
+  renderCheat();
+  init();
+});
+})();
+</script>
+</body>
+</html>

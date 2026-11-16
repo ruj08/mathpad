@@ -1,7 +1,7 @@
 {
   "name": "mathpad",
   "productName": "Mathpad",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Math notes in plain text: type x^2/3 or int_0^1 x^2 dx and see real notation.",
   "main": "main.js",
   "license": "MIT",
@@ -61,5 +61,8 @@
       "artifactName": "Mathpad-Setup-${version}.exe",
       "deleteAppDataOnUninstall": false
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }
